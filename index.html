@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>esevadraft - E-Sevai Centered Automation</title>
+    <link rel="icon" type="image/png" href="./src/assets/images/app_logo.png" />
+    <meta name="description" content="AI-powered document extraction, form filling, and image optimization assistant for E-Sevai centers." />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./src/main.tsx"></script>
+    <script>
+      // Debug helper for desktop
+      if (window.process && window.process.versions && window.process.versions.electron) {
+        console.log('Running in Electron');
+      }
+    </script>
+  </body>
+</html>
+

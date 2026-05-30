@@ -1,0 +1,49 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Dancing+Script:wght@400;700&family=Great+Vibes&family=Alex+Brush&family=Mrs+Saint+Delafield&family=Monsieur+La+Doulaise&family=Herr+Von+Muellerhoff&family=Caveat:wght@400;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-signature-1: "Dancing Script", cursive;
+  --font-signature-2: "Great Vibes", cursive;
+  --font-signature-3: "Alex Brush", cursive;
+  --font-signature-4: "Mrs Saint Delafield", cursive;
+  --font-signature-5: "Monsieur La Doulaise", cursive;
+  --font-signature-6: "Herr Von Muellerhoff", cursive;
+  --font-signature-7: "Caveat", cursive;
+}
+
+@layer utilities {
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Enforce grab/grabbing cursors even over details and text selections */
+  .drag-handle-cursor,
+  .drag-handle-cursor * {
+    cursor: grab !important;
+    cursor: -webkit-grab !important;
+  }
+  .drag-handle-cursor:active,
+  .drag-handle-cursor:active * {
+    cursor: grabbing !important;
+    cursor: -webkit-grabbing !important;
+  }
+}

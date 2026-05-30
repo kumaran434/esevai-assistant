@@ -1,0 +1,126 @@
+{
+  "entities": {
+    "Customer": {
+      "title": "Customer Profile",
+      "description": "Stores client master data for e-Sevai/CSC agents",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "nameTamil": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "motherName": { "type": "string" },
+        "motherNameTamil": { "type": "string" },
+        "fatherName": { "type": "string" },
+        "fatherNameTamil": { "type": "string" },
+        "spouseName": { "type": "string" },
+        "spouseNameTamil": { "type": "string" },
+        "aadhaar": { "type": "string" },
+        "pan": { "type": "string" },
+        "smartCard": { "type": "string" },
+        "voterId": { "type": "string" },
+        "canNumber": { "type": "string" },
+        "doorNo": { "type": "string" },
+        "streetName": { "type": "string" },
+        "streetNameTamil": { "type": "string" },
+        "village": { "type": "string" },
+        "villageTamil": { "type": "string" },
+        "taluk": { "type": "string" },
+        "talukTamil": { "type": "string" },
+        "district": { "type": "string" },
+        "districtTamil": { "type": "string" },
+        "state": { "type": "string" },
+        "stateTamil": { "type": "string" },
+        "pincode": { "type": "string" },
+        "addressTamil": { "type": "string" },
+        "bankName": { "type": "string" },
+        "accountNumber": { "type": "string" },
+        "ifscCode": { "type": "string" },
+        "dob": { "type": "string" },
+        "gender": { "type": "string" },
+        "genderTamil": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "phone", "userId"]
+    },
+    "UserProfile": {
+      "title": "Agent Profile",
+      "description": "Configuration and details for the agent",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "state": { "type": "string" },
+        "language": { "type": "string" }
+      }
+    },
+    "Portal": {
+      "title": "Custom Portal",
+      "description": "User defined website links for quick access",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "url", "userId"]
+    },
+    "AppLog": {
+      "title": "Application System Log",
+      "description": "Activity and Errors for AI diagnostics",
+      "type": "object",
+      "properties": {
+        "error": { "type": "string" },
+        "stack": { "type": "string" },
+        "context": { "type": "string" },
+        "url": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["error", "activity"] }
+      }
+    },
+    "Credential": {
+      "title": "Portal Login Credentials",
+      "description": "User specific credentials used for automatic login auto-fill on portals",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "url": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "autoLogin": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "url", "username", "password"]
+    }
+  },
+  "firestore": {
+    "/customers/{customerId}": {
+      "schema": "Customer",
+      "description": "Collection of customer profiles owned by specific agents"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Agent configuration data"
+    },
+    "/portals/{portalId}": {
+      "schema": "Portal",
+      "description": "User defined website links"
+    },
+    "/credentials/{credentialId}": {
+      "schema": "Credential",
+      "description": "Auto-fill portal login keys for the agent"
+    },
+    "/logs/{logId}": {
+      "schema": "AppLog",
+      "description": "System-wide logs for AI diagnostics"
+    }
+  }
+}

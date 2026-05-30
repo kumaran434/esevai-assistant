@@ -1,0 +1,20 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // பயனர் உள்நுழைந்துள்ளார் என்பதை உறுதிப்படுத்த
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // பயனர்கள் தங்களின் தனிப்பட்ட கோப்புறையை (Folder) மட்டுமே அணுக அனுமதிக்கும் விதி
+    match /users/{userId}/{allPaths=**} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // மற்ற அனைத்து சேமிப்பக அணுகல்களையும் தடுக்க
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

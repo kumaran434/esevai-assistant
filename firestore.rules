@@ -1,0 +1,38 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // பயனர் உள்நுழைந்துள்ளார் என்பதை உறுதிப்படுத்த
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // தங்களின் சொந்த ஆவணங்களை மட்டுமே அணுக முடியும் என்பதை உறுதிப்படுத்த
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // Customers Collection Rules
+    match /customers/{customerId} {
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId);
+      allow read, update, delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+    
+    // Portals Collection Rules (if custom user portals are stored)
+    match /portals/{portalId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAuthenticated() && isOwner(request.resource.data.userId);
+    }
+
+    // Credentials Collection Rules (sensitive usernames and passwords)
+    match /credentials/{credentialId} {
+      allow create: if isAuthenticated() && isOwner(request.resource.data.userId);
+      allow read, update, delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+    
+    // மற்ற அனைத்து அணுகல்களையும் தடுக்க
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

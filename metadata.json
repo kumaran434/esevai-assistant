@@ -1,0 +1,6 @@
+{
+  "name": "esevadraft",
+  "description": "AI-powered document extraction and form filling assistant for E-Sevai portals. Features include ID cropping, signature generation, and automated data entry.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
