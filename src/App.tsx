@@ -257,8 +257,12 @@ export default function App() {
     setActivePortal(name);
     setActivePortalUrl(cleanUrl);
 
-    if (isDesktop && cleanUrl && cleanUrl !== "newtab") {
-      ipc.send("open-portal", { id: newTabId, url: cleanUrl, name });
+    if (isDesktop) {
+      if (cleanUrl && cleanUrl !== "newtab") {
+        ipc.send("open-portal", { id: newTabId, url: cleanUrl, name });
+      } else {
+        ipc.send("switch-tab", newTabId);
+      }
     }
   };
 

@@ -43,6 +43,23 @@ import { extractDetailsFromDocuments } from "../../services/geminiService";
 import { customerService } from "../../services/customerService";
 import { useToast } from "../../hooks/useToast";
 
+const getApiUrl = (endpoint: string) => {
+  const baseUrl = import.meta.env.VITE_SERVER_URL || "";
+  if (baseUrl) {
+    const cleanBase = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+    const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    return `${cleanBase}${cleanEndpoint}`;
+  }
+  const isElectron = typeof window !== 'undefined' && 
+     ((window as any).process?.versions?.electron || 
+      navigator.userAgent.toLowerCase().indexOf(' electron/') > -1);
+  if (window.location.protocol === 'file:' || isElectron) {
+    const fallbackUrl = "https://esevai-assistant.web.app";
+    return `${fallbackUrl}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+  }
+  return endpoint;
+};
+
 interface WordEditorProps {
   activeProfile?: any;
   isNarrow?: boolean;
@@ -422,7 +439,7 @@ export default function WordEditor({ activeProfile, isNarrow, onBack }: WordEdit
     setIsAnalyzingTemplate(true);
     setAiAnalysisError(null);
     try {
-      const response = await fetch("/api/word-ai-analyze", {
+      const response = await fetch(getApiUrl("/api/word-ai-analyze"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ templateHtml: editorRef.current.innerHTML })
@@ -503,7 +520,7 @@ export default function WordEditor({ activeProfile, isNarrow, onBack }: WordEdit
         activeImages.push({ base64: base64Str, mimeType: file.type });
       }
 
-      const response = await fetch("/api/extract", {
+      const response = await fetch(getApiUrl("/api/extract"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ images: activeImages })
@@ -568,7 +585,7 @@ export default function WordEditor({ activeProfile, isNarrow, onBack }: WordEdit
         extractedDetails: consolidated
       };
 
-      const response = await fetch("/api/word-ai-fill", {
+      const response = await fetch(getApiUrl("/api/word-ai-fill"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)

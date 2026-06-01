@@ -207,17 +207,28 @@ function setupIpcHandlers(mainWindow) {
   mainWindow.on('resize', updatePortalBounds);
 
   function switchToTab(id) {
-    if (!portalViews[id] || portalViews[id].webContents.isDestroyed()) return;
-    
     if (portalView && !portalView.webContents.isDestroyed()) {
-      mainWindow.removeBrowserView(portalView);
+      try {
+        mainWindow.removeBrowserView(portalView);
+      } catch (err) {
+        console.error('Error removing BrowserView in switchToTab:', err);
+      }
+      portalView = null;
     }
     
     activeTabId = id;
-    portalView = portalViews[id];
     
-    mainWindow.addBrowserView(portalView);
-    updatePortalBounds();
+    if (!portalViews[id] || portalViews[id].webContents.isDestroyed()) {
+      return;
+    }
+    
+    portalView = portalViews[id];
+    try {
+      mainWindow.addBrowserView(portalView);
+      updatePortalBounds();
+    } catch (err) {
+      console.error('Error adding BrowserView to mainWindow in switchToTab:', err);
+    }
   }
 
   ipcMain.on('switch-tab', (event, id) => {

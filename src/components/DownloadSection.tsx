@@ -41,11 +41,27 @@ export default function DownloadSection() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [updaterError, setUpdaterError] = useState("");
 
+  const getApiUrl = (endpoint: string) => {
+    const baseUrl = import.meta.env.VITE_SERVER_URL || "";
+    if (baseUrl) {
+      const cleanBase = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+      const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+      return `${cleanBase}${cleanEndpoint}`;
+    }
+    // Deep fallback inside electron production file scheme
+    if (window.location.protocol === 'file:' || isElectron) {
+      // Check if we can extract current deployment base
+      const fallbackUrl = "https://esevai-assistant.web.app"; // Stable base fallback
+      return `${fallbackUrl}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+    }
+    return endpoint;
+  };
+
   const checkForUpdates = async () => {
     setUpdateStatus('checking');
     setUpdaterError("");
     try {
-      const response = await fetch('/api/latest-version');
+      const response = await fetch(getApiUrl('/api/latest-version'));
       if (!response.ok) throw new Error("பதிப்பு தகவல் பெற முடியவில்லை.");
       const data = await response.json();
       setLatestVersionData(data);
