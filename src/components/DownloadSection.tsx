@@ -16,8 +16,8 @@ export default function DownloadSection() {
   // எங்களின் சமீபத்திய வெர்ஷன் தகவல்
   const LATEST_VERSION = "1.1.5";
 
-  // உங்களது Firebase Storage டவுன்லோட் லிங்க்-ஐ (Download URL) கீழே உள்ள வரியில் மாற்றவும்
-  const WINDOWS_DOWNLOAD_URL = "https://firebasestorage.googleapis.com/v0/b/gen-lang-client-0792225149.firebasestorage.app/o/esevadraft%20Setup%201.1.5.exe?alt=media&token=583ecbfd-7379-448e-bb03-7b0a5783f2e8";
+  // உங்களது GitHub சாப்ட்வேர் ரிலீஸ் டவுன்லோட் லிங்க்-ஐ (Download URL) கீழே உள்ள வரியில் மாற்றவும்
+  const WINDOWS_DOWNLOAD_URL = "https://github.com/kumaran434/esevai-assistant/releases/download/v1.1.5/esevadraft.Setup.1.1.5.exe";
   const MAC_DOWNLOAD_URL = "#";
 
   const handleDownload = (url: string) => {

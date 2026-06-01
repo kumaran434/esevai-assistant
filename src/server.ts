@@ -28,14 +28,14 @@ async function startServer() {
   // Latest App Version and Update configuration with smart GitHub Release automation
   app.get("/api/latest-version", async (req, res) => {
     const owner = process.env.GITHUB_OWNER || "kumaran434"; // Default fallback username
-    const repo = process.env.GITHUB_REPO || "esevadraft";      // Default fallback repository
+    const repo = process.env.GITHUB_REPO || "esevai-assistant";      // Default fallback repository
 
     try {
       // Dynamic fetch from GitHub releases API
       const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
         headers: {
           "Accept": "application/vnd.github.v3+json",
-          "User-Agent": "esevadraft-updater"
+          "User-Agent": "esevai-assistant-updater"
         }
       });
 
@@ -66,7 +66,7 @@ async function startServer() {
     // Default stable static fallback if GitHub API call fails or is not yet published
     res.json({
       version: "1.1.5",
-      downloadUrl: "https://firebasestorage.googleapis.com/v0/b/gen-lang-client-0792225149.firebasestorage.app/o/esevadraft%20Setup%201.1.5.exe?alt=media&token=583ecbfd-7379-448e-bb03-7b0a5783f2e8",
+      downloadUrl: "https://github.com/kumaran434/esevai-assistant/releases/download/v1.1.5/esevadraft.Setup.1.1.5.exe",
       changelog: [
         "ஏஐ ஸ்மார்ட் பகுப்பாய்வு இருபுறமும் உள்ள அட்டைகளைப் படிக்கும் புதிய வசதி (Double-sided proof extraction support)",
         "ஆவண அச்சிடல் மற்றும் பிரிண்ட் வடிவமைப்புப் பிழை திருத்தங்கள் (Print layout fixes)",
