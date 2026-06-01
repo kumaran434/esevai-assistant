@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Download, Monitor, Shield, Zap, Sparkles, Cpu, Globe, RefreshCw, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useLanguage } from '../lib/translations';
+import packageInfo from '../../package.json';
 
 export default function DownloadSection() {
   const { t } = useLanguage();
@@ -14,10 +15,10 @@ export default function DownloadSection() {
   ];
 
   // எங்களின் சமீபத்திய வெர்ஷன் தகவல்
-  const LATEST_VERSION = "1.1.5";
+  const LATEST_VERSION = packageInfo.version;
 
   // உங்களது GitHub சாப்ட்வேர் ரிலீஸ் டவுன்லோட் லிங்க்-ஐ (Download URL) கீழே உள்ள வரியில் மாற்றவும்
-  const WINDOWS_DOWNLOAD_URL = "https://github.com/kumaran434/esevai-assistant/releases/download/v1.1.5/esevadraft.Setup.1.1.5.exe";
+  const WINDOWS_DOWNLOAD_URL = `https://github.com/kumaran434/esevai-assistant/releases/download/v${packageInfo.version}/esevadraft.Setup.${packageInfo.version}.exe`;
   const MAC_DOWNLOAD_URL = "#";
 
   const handleDownload = (url: string) => {
@@ -34,7 +35,7 @@ export default function DownloadSection() {
       navigator.userAgent.toLowerCase().indexOf(' electron/') > -1);
 
   // Auto-Update States
-  const [currentVersion, setCurrentVersion] = useState("1.1.5");
+  const [currentVersion, setCurrentVersion] = useState(packageInfo.version);
   const [latestVersionData, setLatestVersionData] = useState<{version: string, downloadUrl: string, changelog: string[]} | null>(null);
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'downloading' | 'ready-to-install' | 'uptodate' | 'error'>('idle');
   const [downloadProgress, setDownloadProgress] = useState(0);

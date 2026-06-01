@@ -6,6 +6,7 @@ import Razorpay from "razorpay";
 import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import fs from "fs";
 
 dotenv.config();
 
@@ -63,10 +64,22 @@ async function startServer() {
       console.error("Failed to query GitHub releases, falling back to Firebase URL:", err);
     }
 
+    let currentVersion = "1.1.5";
+    try {
+      const packageJsonPath = path.join(process.cwd(), "package.json");
+      const packageJsonContent = fs.readFileSync(packageJsonPath, "utf-8");
+      const packageJson = JSON.parse(packageJsonContent);
+      if (packageJson.version) {
+        currentVersion = packageJson.version;
+      }
+    } catch (e) {
+      console.error("Failed to read package.json version in server.ts fallback", e);
+    }
+
     // Default stable static fallback if GitHub API call fails or is not yet published
     res.json({
-      version: "1.1.5",
-      downloadUrl: "https://github.com/kumaran434/esevai-assistant/releases/download/v1.1.5/esevadraft.Setup.1.1.5.exe",
+      version: currentVersion,
+      downloadUrl: `https://github.com/kumaran434/esevai-assistant/releases/download/v${currentVersion}/esevadraft.Setup.${currentVersion}.exe`,
       changelog: [
         "ஏஐ ஸ்மார்ட் பகுப்பாய்வு இருபுறமும் உள்ள அட்டைகளைப் படிக்கும் புதிய வசதி (Double-sided proof extraction support)",
         "ஆவண அச்சிடல் மற்றும் பிரிண்ட் வடிவமைப்புப் பிழை திருத்தங்கள் (Print layout fixes)",

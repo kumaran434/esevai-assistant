@@ -28,6 +28,7 @@ import Pricing from "./components/Pricing";
 import ActiveCustomerSidebar from "./components/ActiveCustomerSidebar";
 import { motion, AnimatePresence } from "motion/react";
 import { reportAppError } from "./lib/firebase-utils";
+import packageInfo from "../package.json";
 import { customerService } from "./services/customerService";
 import { Customer } from "./types";
 
@@ -69,6 +70,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [isNewTabMenuOpen, setIsNewTabMenuOpen] = useState(false);
   const [urlInputField, setUrlInputField] = useState("");
+  const [dropdownUrlInput, setDropdownUrlInput] = useState("");
 
   // Sync address bar input on portal change
   useEffect(() => {
@@ -234,15 +236,17 @@ export default function App() {
 
   const openPortal = (url: string, name: string) => {
     const cleanUrl = url.trim();
-    const existingTab = tabs.find((t) => t.url === cleanUrl);
-    if (existingTab) {
-      setActiveTabId(existingTab.id);
-      setActivePortal(existingTab.name);
-      setActivePortalUrl(existingTab.url);
-      if (isDesktop) {
-        ipc.send("switch-tab", existingTab.id);
+    if (cleanUrl !== "newtab") {
+      const existingTab = tabs.find((t) => t.url === cleanUrl);
+      if (existingTab) {
+        setActiveTabId(existingTab.id);
+        setActivePortal(existingTab.name);
+        setActivePortalUrl(existingTab.url);
+        if (isDesktop) {
+          ipc.send("switch-tab", existingTab.id);
+        }
+        return;
       }
-      return;
     }
 
     const newTabId = "tab-" + Date.now();
@@ -253,8 +257,25 @@ export default function App() {
     setActivePortal(name);
     setActivePortalUrl(cleanUrl);
 
-    if (isDesktop && cleanUrl) {
+    if (isDesktop && cleanUrl && cleanUrl !== "newtab") {
       ipc.send("open-portal", { id: newTabId, url: cleanUrl, name });
+    }
+  };
+
+  const updateCurrentTab = (url: string, name: string) => {
+    const cleanUrl = url.trim();
+    if (!activeTabId) return;
+
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id === activeTabId ? { ...tab, name, url: cleanUrl } : tab
+      )
+    );
+    setActivePortal(name);
+    setActivePortalUrl(cleanUrl);
+
+    if (isDesktop && cleanUrl) {
+      ipc.send("open-portal", { id: activeTabId, url: cleanUrl, name });
     }
   };
 
@@ -408,7 +429,7 @@ export default function App() {
               </div>
 
               {/* Seamless Chrome Tabs List */}
-              <div className="flex items-end overflow-x-auto gap-[3px] px-1 h-full max-w-[calc(100vw-360px)] no-scrollbar">
+              <div className="flex items-end overflow-x-auto gap-[3px] px-1 h-full max-w-[calc(100vw-390px)] no-scrollbar">
                 {tabs.map((tab) => {
                   const isActive = activeTabId === tab.id;
                   return (
@@ -444,75 +465,17 @@ export default function App() {
                     </div>
                   );
                 })}
+              </div>
 
-                {/* THE CHROME PLUS (+) BUTTON FOR QUICK CHROME POPUP */}
-                <div className="relative shrink-0 pb-1.5 self-end">
-                  <button
-                    onClick={() => setIsNewTabMenuOpen(!isNewTabMenuOpen)}
-                    className={`w-7 h-7 hover:bg-white/10 text-slate-300 hover:text-white rounded-lg flex items-center justify-center transition-all cursor-pointer shadow-sm ${isNewTabMenuOpen ? 'bg-indigo-600/30' : 'bg-white/5'}`}
-                    title="புதிய போர்டல் திறக்க (New Tab)"
-                  >
-                    <Plus size={15} />
-                  </button>
-
-                  <AnimatePresence>
-                    {isNewTabMenuOpen && (
-                      <>
-                        <div className="fixed inset-0 z-[99]" onClick={() => setIsNewTabMenuOpen(false)} />
-                        <motion.div
-                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: 5, scale: 0.95 }}
-                          className="absolute left-0 mt-2 w-72 bg-[#1e293b] border border-indigo-500/20 rounded-2xl shadow-2xl z-[100] py-2.5 overflow-hidden"
-                        >
-                          <div className="px-4 py-1.5 text-[10px] font-black text-indigo-400 tracking-wider uppercase border-b border-indigo-500/10 mb-2">
-                            அரசு இணையதளங்கள் (Portals)
-                          </div>
-                          
-                          <div className="max-h-[280px] overflow-y-auto no-scrollbar px-1">
-                            {[
-                              { name: "TNeGA e-Sevai", url: "https://www.tnesevai.tn.gov.in/" },
-                              { name: "TN Smart Card (PDS)", url: "https://www.tnpds.gov.in/" },
-                              { name: "Patta Chitta", url: "https://eservices.tn.gov.in/" },
-                              { name: "TN Registration (பதிவுத்துறை)", url: "https://tnreginet.gov.in/" },
-                              { name: "Aadhaar (UIDAI)", url: "https://myaadhaar.uidai.gov.in/" },
-                              { name: "Voter Portal (NVSP)", url: "https://voters.eci.gov.in/" },
-                              { name: "PAN Card (UTIITS)", url: "https://www.pan.utiitsl.com/" },
-                              { name: "Passport Seva", url: "https://www.passportindia.gov.in/" },
-                              { name: "Income Tax (e-Filing)", url: "https://www.incometax.gov.in/" },
-                              { name: "EPF Member Portal (PF)", url: "https://unifiedportal-mem.epfindia.gov.in/memberinterface/" }
-                            ].map((preset) => (
-                              <button
-                                key={preset.name}
-                                onClick={() => {
-                                  openPortal(preset.url, preset.name);
-                                  setIsNewTabMenuOpen(false);
-                                }}
-                                className="w-full text-left px-3.5 py-2.5 text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-800 rounded-xl flex items-center gap-2.5 transition-all cursor-pointer group"
-                              >
-                                <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 group-hover:bg-indigo-400 group-hover:scale-110 transition-all shrink-0" />
-                                <span className="truncate">{preset.name}</span>
-                              </button>
-                            ))}
-                          </div>
-                          
-                          <div className="border-t border-indigo-500/10 mt-2 pt-2 px-1">
-                            <button
-                              onClick={() => {
-                                minimizePortal();
-                                setIsNewTabMenuOpen(false);
-                              }}
-                              className="w-full text-left px-3.5 py-2.5 text-xs font-bold text-indigo-400 hover:text-indigo-300 hover:bg-slate-800 rounded-xl flex items-center gap-2.5 transition-all cursor-pointer uppercase tracking-wider"
-                            >
-                              <Monitor size={14} className="shrink-0" />
-                              <span>முகப்புப்பக்கம் (Dashboard)</span>
-                            </button>
-                          </div>
-                        </motion.div>
-                      </>
-                    )}
-                  </AnimatePresence>
-                </div>
+              {/* THE CHROME PLUS (+) BUTTON FOR QUICK CHROME POPUP (Moved outside of scroll area so the dropdown won't clip) */}
+              <div className="relative shrink-0 pb-1.5 self-end z-50">
+                <button
+                  onClick={() => openPortal("newtab", "புதிய பக்கம்")}
+                  className="w-7 h-7 hover:bg-white/10 text-slate-300 hover:text-white rounded-lg flex items-center justify-center transition-all cursor-pointer shadow-sm bg-white/5"
+                  title="புதிய போர்டல் திறக்க (New Tab)"
+                >
+                  <Plus size={15} />
+                </button>
               </div>
             </div>
 
@@ -552,7 +515,7 @@ export default function App() {
                     if (!/^https?:\/\//i.test(targetUrl)) {
                       targetUrl = "https://" + targetUrl;
                     }
-                    openPortal(targetUrl, "இணையதளம்");
+                    updateCurrentTab(targetUrl, "இணையதளம்");
                   }
                 }}
                 className="flex-1 max-w-2xl"
@@ -602,7 +565,11 @@ export default function App() {
           </div>
 
           <div className="flex-1 relative bg-slate-50">
-            {isDesktop ? (
+            {activePortalUrl === "newtab" ? (
+              <div className="w-full h-full p-6 overflow-y-auto bg-slate-50 relative">
+                <Portals onOpenPortal={(url, name) => updateCurrentTab(url, name)} />
+              </div>
+            ) : isDesktop ? (
               <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50/50 relative">
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/graphy.png')] opacity-10" />
                 <div className="relative z-10 flex flex-col items-center gap-6 animate-pulse">
@@ -673,7 +640,7 @@ export default function App() {
             </p>
             <div className="flex flex-col gap-4 relative z-10">
               <a
-                href="https://firebasestorage.googleapis.com/v0/b/gen-lang-client-0792225149.firebasestorage.app/o/E-Sevai%20Automator%20Setup%201.1.5.exe?alt=media&token=e15adddd-29d1-40a9-aa11-df87cefc2b85"
+                href={`https://github.com/kumaran434/esevai-assistant/releases/download/v${packageInfo.version}/esevadraft.Setup.${packageInfo.version}.exe`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full py-5 bg-white text-blue-600 rounded-2xl font-black text-xs text-center uppercase tracking-[0.2em] hover:bg-slate-50 transition-all shadow-xl active:scale-95"
@@ -761,7 +728,7 @@ export default function App() {
       );
 
     if (activePortal) {
-      if (isDesktop) return renderDesktopPortalLayout();
+      if (isDesktop || activePortalUrl === "newtab") return renderDesktopPortalLayout();
       return renderWebLockoutLayout();
     }
 
