@@ -8,6 +8,7 @@ const { setupAutomation } = require('./main-process/automation-logic.cjs');
 const { setupIpcHandlers } = require('./main-process/ipc-handlers.cjs');
 const { setupSession } = require('./main-process/session-manager.cjs');
 const { injectDebugScripts, setupShortcuts } = require('./main-process/utils.cjs');
+const { setupAutoUpdate } = require('./main-process/update-manager.cjs');
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -45,6 +46,7 @@ function createWindow() {
   setupShortcuts(win);
   setupSession(win);
   setupIpcHandlers(win);
+  setupAutoUpdate(win);
 }
 
 // App lifecycle
