@@ -19,6 +19,74 @@ export const api = onRequest({
 }, async (req, res) => {
   const path = req.path.toLowerCase();
 
+  // Handle latest-version endpoint (does not require Gemini API keys)
+  if (path.includes("latest-version")) {
+    const owner = process.env.GITHUB_OWNER || "kumaran434";
+    const repo = process.env.GITHUB_REPO || "esevai-assistant";
+
+    try {
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
+        headers: {
+          "Accept": "application/vnd.github.v3+json",
+          "User-Agent": "esevai-assistant-updater"
+        }
+      });
+
+      if (response.ok) {
+        const release = (await response.json()) as any;
+        const exeAsset = release.assets?.find((asset: any) => asset.name.endsWith('.exe'));
+        
+        if (exeAsset) {
+          const rawBody = release.body || "";
+          const changelog = rawBody
+            .split('\n')
+            .map((line: string) => line.replace(/^-\s*/, '').replace(/^\*\s*/, '').trim())
+            .filter((line: string) => line.length > 0);
+
+          res.json({
+            version: release.tag_name.replace(/^v/, ''),
+            downloadUrl: exeAsset.browser_download_url,
+            changelog: changelog.length > 0 ? changelog : ["புதிய மேம்படுத்தல்கள் மற்றும் செயல்திறன் திருத்தங்கள் (Performance updates and bug fixes)"]
+          });
+          return;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to query GitHub releases on Firebase Cloud Function:", err);
+    }
+
+    let currentVersion = "1.1.6";
+    const hostname = req.hostname || "esevai-assistant.web.app";
+    try {
+      // First try to check the live deployed package.json for instant dynamic updates without GitHub delays
+      const localResponse = await fetch(`https://${hostname}/package.json`);
+      if (localResponse.ok) {
+        const pkg = await localResponse.json() as any;
+        if (pkg.version) currentVersion = pkg.version;
+      } else {
+        // Fallback to raw GitHub package.json if hosting fails
+        const pkgResponse = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/main/package.json`);
+        if (pkgResponse.ok) {
+          const pkg = await pkgResponse.json() as any;
+          if (pkg.version) currentVersion = pkg.version;
+        }
+      }
+    } catch (pkge) {
+       console.error("Failed to query live package.json version", pkge);
+    }
+
+    res.json({
+      version: currentVersion,
+      downloadUrl: `https://github.com/kumaran434/esevai-assistant/releases/download/v${currentVersion}/esevadraft.Setup.${currentVersion}.exe`,
+      changelog: [
+        "ஏஐ ஸ்மார்ட் பகுப்பாய்வு இருபுறமும் உள்ள அட்டைகளைப் படிக்கும் புதிய வசதி (Double-sided proof extraction support)",
+        "ஆட்டோமேஷன் வேக மேம்படுத்தல் மற்றும் செயல்திறன் சீரமைப்பு (Auto-fill speed and performance improvements)",
+        "புதிய ஏஐ வேர்ட் எடிட்டர் பகுப்பாய்வு டூல்கள் (AI Word Editor assistant tools)"
+      ]
+    });
+    return;
+  }
+
   // Handle Razorpay Payment Endpoints first (unrelated to Gemini API)
   if (path.includes("payment")) {
     try {
@@ -344,6 +412,95 @@ export const api = onRequest({
       });
       res.json({ translation: (result.text || "").trim() });
       
+    } else if (path.includes("word-ai-analyze")) {
+      const { templateHtml } = req.body;
+      if (!templateHtml || templateHtml.trim().length === 0) {
+        res.status(400).json({ error: "பகுப்பாய்வு செய்ய ஆவணத்தில் உரை இல்லை. (No content inside doc)" });
+        return;
+      }
+
+      const prompt = `You are an expert Tamil document analyzer and automation assistant.
+      Your goal is to inspect this template / word draft HTML:
+      
+      \`\`\`html
+      ${templateHtml}
+      \`\`\`
+      
+      Task:
+      Determine:
+      1. What type of document this is (e.g. Rent Agreement, Affidavit, Undertaking, Power of Attorney).
+      2. Write a highly professional and friendly summary in TAMIL explaining what this document is, and explaining what documents are needed from the parties to fill it completely (e.g. "இது வாடகை ஒப்பந்தப் பத்திரம் ஆகும். இதனை வெற்றிகரமாகப் பூர்த்தி செய்ய வாடகைதாரர் மற்றும் வீட்டு உரிமையாளரின் ஆதார் அட்டைகளை ஏற்றவும்.")
+      3. Identify exactly 1 to 2 documents that are required as uploads. For each document, configure:
+         - \`id\`: simple English slug (e.g., "tenant_aadhaar", "landlord_aadhaar")
+         - \`label\`: Tamil label indicating what it is (e.g., "வாடகைதாரர் ஆதார் அட்டை (Tenant Aadhaar)", "உரிமையாளர் ஆதார் அட்டை (Landlord Aadhaar)")
+         - \`partyType\`: brief party designation in Tamil (e.g., "வாடகைதாரர்", "உரிமையாளர்")
+         - \`doubleSided\`: boolean. Set to TRUE if this document is typically a double-sided identity card (Aadhaar Card, Smart Ration Card, Driving License, Voter ID Card, PAN card) because useful fields are spread across both sides. Else FALSE.
+      4. A list of expected fields.
+      
+      Return ONLY a pure valid JSON object fitting this schema:
+      {
+        "documentType": "English doc type name",
+        "analysisTamil": "Friendly description of document and what is requested in Tamil",
+        "requiredDocs": [
+          { "id": "slug_id", "label": "Tamil label", "partyType": "Tamil party", "doubleSided": true }
+        ],
+        "fieldsNeeded": ["Tamil labels", "Like", "வாடகைதாரர் பெயர்"]
+      }
+      
+      Do NOT wrap response in markdown blocks. Return pure JSON.`;
+
+      const result = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+      
+      res.status(200).json(JSON.parse((result.text || "{}").trim()));
+
+    } else if (path.includes("word-ai-fill")) {
+      const { templateHtml, extractedDetails } = req.body;
+      if (!templateHtml) {
+        res.status(400).json({ error: "Missing templateHtml" });
+        return;
+      }
+
+      const prompt = `You are a professional legal scripter and legal documents generator.
+      Your mission is to fill out the following template / document HTML:
+      
+      \`\`\`html
+      ${templateHtml}
+      \`\`\`
+      
+      Using these highly precise extracted data payloads of candidates/parties:
+      
+      \`\`\`json
+      ${JSON.stringify(extractedDetails)}
+      \`\`\`
+      
+      Instructions:
+      1. Look for all empty blanks like "_______", placeholder labels like "[வாடகைதாரர் பெயர்]", "[கதவு எண்]", "[ஆதார் எண்]", "[உரிமையாளர் முகவரி]", etc., and replace them beautifully with the extracted values.
+      2. If a value is in English, translate or transliterate it intelligently to dynamic elegant Tamil to blend perfectly with the surrounding text (e.g., 'Karthik' becomes 'கார்த்திக்', 'Chennai' becomes 'சென்னை').
+      3. Maintain the EXACT HTML tag hierarchy, inline CSS, line breaks (<br>), list items, strong marks (<b>), tables, and structure. Do NOT delete or rewrite non-placeholder content. Return ONLY the fully-filled HTML layout.
+      
+      Return ONLY a pure valid JSON object with the filled HTML:
+      {
+        "filledHtml": "The filled HTML string here..."
+      }
+      
+      Do NOT wrap in markdown enclosing blocks. Return pure JSON.`;
+
+      const result = await ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+      
+      res.status(200).json(JSON.parse((result.text || "{}").trim()));
+
     } else {
       res.status(404).json({ error: "Endpoint not found" });
     }

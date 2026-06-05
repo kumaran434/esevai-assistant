@@ -606,8 +606,10 @@ function setupIpcHandlers(mainWindow) {
 
   ipcMain.on('start-update-download', (event, { downloadUrl }) => {
     const https = require('https');
+    const http = require('http');
     const fs = require('fs');
     const path = require('path');
+    const { URL } = require('url');
     
     const tempDir = app.getPath('temp');
     const tempPath = path.join(tempDir, 'esevadraft-setup-latest.exe');
@@ -617,13 +619,26 @@ function setupIpcHandlers(mainWindow) {
       try { fs.unlinkSync(tempPath); } catch (e) { console.error(e); }
     }
     
-    const file = fs.createWriteStream(tempPath);
+    let file = null;
     
-    const downloadFile = (url) => {
-      updateDownloadRequest = https.get(url, (response) => {
-        // Handle redirect codes 301, 302, 307, 308 (critical for Cloud Run / Firebase Redirects)
+    const downloadFile = (currentUrl) => {
+      let parsedUrl;
+      try {
+        parsedUrl = new URL(currentUrl);
+      } catch (err) {
+        event.reply('update-download-progress', { success: false, error: 'செல்லாத பதிவிறக்க முகவரி (Invalid URL)' });
+        return;
+      }
+      const requestLib = parsedUrl.protocol === 'https:' ? https : http;
+      
+      updateDownloadRequest = requestLib.get(currentUrl, (response) => {
+        // Handle redirect codes 301, 302, 307, 308 (critical for Cloud Run / GitHub/ Firebase Redirects)
         if (response.statusCode === 301 || response.statusCode === 302 || response.statusCode === 307 || response.statusCode === 308) {
-          downloadFile(response.headers.location);
+          let redirectUrl = response.headers.location;
+          if (!redirectUrl.startsWith('http')) {
+            redirectUrl = new URL(redirectUrl, currentUrl).href;
+          }
+          downloadFile(redirectUrl);
           return;
         }
         
@@ -634,6 +649,13 @@ function setupIpcHandlers(mainWindow) {
         
         const totalBytes = parseInt(response.headers['content-length'] || '0', 10);
         let downloadedBytes = 0;
+        
+        try {
+          file = fs.createWriteStream(tempPath);
+        } catch (fileErr) {
+          event.reply('update-download-progress', { success: false, error: `கோப்பு உருவாக்க முடியவில்லை: ${fileErr.message}` });
+          return;
+        }
         
         response.on('data', (chunk) => {
           downloadedBytes += chunk.length;
@@ -647,8 +669,13 @@ function setupIpcHandlers(mainWindow) {
           file.close();
           event.reply('update-download-progress', { success: true, progress: 100, done: true, path: tempPath });
         });
+
+        file.on('error', (err) => {
+          fs.unlink(tempPath, () => {});
+          event.reply('update-download-progress', { success: false, error: `கோப்பு எழுதுவதில் பிழை: ${err.message}` });
+        });
       }).on('error', (err) => {
-        fs.unlink(tempPath, () => {});
+        if (file) { fs.unlink(tempPath, () => {}); }
         event.reply('update-download-progress', { success: false, error: err.message });
       });
     };
@@ -670,27 +697,22 @@ function setupIpcHandlers(mainWindow) {
   ipcMain.on('install-and-restart-update', (event) => {
     const path = require('path');
     const fs = require('fs');
-    const { spawn } = require('child_process');
     
     const tempPath = path.join(app.getPath('temp'), 'esevadraft-setup-latest.exe');
     if (fs.existsSync(tempPath)) {
-      try {
-        // Launch standard NSIS installer without silent arguments so user sees standard wizard UI, or run detached.
-        const child = spawn(tempPath, [], {
-          detached: true,
-          stdio: 'ignore'
-        });
-        child.unref();
-        
-        // Terminate app so that old file handles are unlocked and the installer can overwrite effortlessly
-        app.quit();
-      } catch (e) {
-        shell.openPath(tempPath).then(() => {
-          app.quit();
-        }).catch(err => {
-          event.reply('update-install-error', err.message);
-        });
-      }
+      // Windows-இல் NSIS இன்ஸ்டாலரை UAC விண்டோவுடன் சரியாக இயக்க shell.openPath மிகவும் நம்பகமானது.
+      shell.openPath(tempPath).then((errResult) => {
+        if (errResult) {
+          event.reply('update-install-error', `இன்ஸ்டாலரைத் திறக்க முடியவில்லை: ${errResult}`);
+        } else {
+          // புதிய அப்டேட் கோப்பு இயங்கியவுடன், பழைய ஃபைல் பூட்டுகளை விடுவிக்க செயலியை மூட வேண்டும்.
+          setTimeout(() => {
+            app.quit();
+          }, 1200);
+        }
+      }).catch(err => {
+        event.reply('update-install-error', err.message);
+      });
     } else {
       event.reply('update-install-error', 'புதிய நிறுவல் கோப்பு கண்டறிவதில் பிழை.');
     }
