@@ -25,6 +25,25 @@ async function safeJson(response: Response): Promise<any> {
   return response.json();
 }
 
+async function handleHttpError(response: Response): Promise<never> {
+  let details = "";
+  try {
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      const data = await response.json();
+      details = data.details || data.error || data.message || "";
+    } else {
+      const text = await response.text();
+      if (text && text.length < 200 && !text.includes("<html")) {
+        details = text;
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to extract error details", e);
+  }
+  throw new Error(details || `Cloud function returned status ${response.status}`);
+}
+
 export async function translateText(
   text: string,
   targetLang: string = 'Tamil'
@@ -36,11 +55,11 @@ export async function translateText(
       body: JSON.stringify({ text, targetLang })
     });
     if (!response.ok) {
-      throw new Error(`Cloud function returned status ${response.status}`);
+      await handleHttpError(response);
     }
     const data = await safeJson(response);
     return data.translation || text;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Translation error proxying to backend:", error);
     return text;
   }
@@ -57,13 +76,13 @@ export async function explainError(
       body: JSON.stringify({ errorContext, fieldInfo })
     });
     if (!response.ok) {
-      throw new Error(`Cloud function returned status ${response.status}`);
+      await handleHttpError(response);
     }
     const data = await safeJson(response);
     return data.explanation || "விவரங்களை விளக்குவதில் சிக்கல் ஏற்பட்டுள்ளது.";
-  } catch (error) {
+  } catch (error: any) {
     console.error("Explain error proxying to backend:", error);
-    return "தொழில்நுட்பக் கோளாறு (Cloud Function Offline).";
+    return `தொழில்நுட்பக் கோளாறு (Cloud Function Offline): ${error.message || ""}`;
   }
 }
 
@@ -85,13 +104,13 @@ export async function analyzeFormFields(
       })
     });
     if (!response.ok) {
-       throw new Error(`Cloud function returned status ${response.status}`);
+       await handleHttpError(response);
     }
     return await safeJson(response);
   } catch (error: any) {
     console.error("Form fields analysis proxying to backend:", error);
     reportAppError(error, "Field Analysis Failure");
-    throw new Error("AI பகுப்பாய்வு செய்வதில் தோல்வி ஏற்பட்டது. உங்கள் இணைய இணைப்பை சரிபார்க்கவும்.");
+    throw new Error(`AI பகுப்பாய்வு செய்வதில் தோல்வி ஏற்பட்டது: ${error.message || "உங்கள் இணைய இணைப்பை சரிபார்க்கவும்."}`);
   }
 }
 
@@ -105,7 +124,7 @@ export async function analyzePortalWithAI(
       body: JSON.stringify({ prompt })
     });
     if (!response.ok) {
-      throw new Error(`Cloud function returned status ${response.status}`);
+      await handleHttpError(response);
     }
     return await safeJson(response);
   } catch (error: any) {
@@ -126,7 +145,7 @@ export async function extractDetailsFromDocuments(
       body: JSON.stringify({ images, customFields, extractionPrompt })
     });
     if (!response.ok) {
-      throw new Error(`Cloud function returned status ${response.status}`);
+      await handleHttpError(response);
     }
     const parsed = await safeJson(response);
     return processCustomFields(parsed, customFields);

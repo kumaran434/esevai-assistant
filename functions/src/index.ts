@@ -203,7 +203,7 @@ export const api = onRequest({
   }
 
   // Helper to validate if a string looks like a valid Google API Key
-  const isValidKey = (k: any) => typeof k === "string" && k.trim().startsWith("AIza") && k.trim().length > 20;
+  const isValidKey = (k: any) => typeof k === "string" && k.trim().length > 10;
 
   let finalApiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_KEY || (process.env as any).GOOGLE_API_KEY;
   
@@ -222,13 +222,13 @@ export const api = onRequest({
   if (!isValidKey(finalApiKey)) {
     res.status(500).json({ 
       error: "API Key invalid or not found.",
-      details: "The server could not find a valid Google AI API Key (must start with AIza)."
+      details: "The server could not find a valid Google AI API Key."
     });
     return;
   }
 
   const ai = new GoogleGenAI({ apiKey: finalApiKey.trim() });
-  const MODEL_NAME = "gemini-3-flash-preview";
+  const MODEL_NAME = "gemini-2.5-flash";
 
   try {
     if (path.includes("analyze-fields")) {
