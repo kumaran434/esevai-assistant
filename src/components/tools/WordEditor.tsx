@@ -54,7 +54,7 @@ const getApiUrl = (endpoint: string) => {
      ((window as any).process?.versions?.electron || 
       navigator.userAgent.toLowerCase().indexOf(' electron/') > -1);
   if (window.location.protocol === 'file:' || isElectron) {
-    const fallbackUrl = "https://esevai-assistant.web.app";
+    const fallbackUrl = "https://esevadraft.in";
     return `${fallbackUrl}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
   }
   return endpoint;

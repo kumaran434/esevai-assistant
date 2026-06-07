@@ -54,7 +54,7 @@ async function startServer() {
             .filter((line: string) => line.length > 0);
 
           return res.json({
-            version: release.tag_name.replace(/^v/, ''), // normalizes 'v1.1.5' to '1.1.5'
+            version: release.tag_name.replace(/^v\.?/i, ''), // normalizes 'v1.1.9' or 'v.1.1.9' to '1.1.9'
             downloadUrl: exeAsset.browser_download_url,
             changelog: changelog.length > 0 ? changelog : ["புதிய மேம்படுத்தல்கள் மற்றும் செயல்திறன் திருத்தங்கள் (Performance updates and bug fixes)"]
           });

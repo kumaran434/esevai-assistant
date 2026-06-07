@@ -51,7 +51,7 @@ export default function DownloadSection() {
     // Deep fallback inside electron production file scheme
     if (window.location.protocol === 'file:' || isElectron) {
       // Check if we can extract current deployment base
-      const fallbackUrl = "https://esevai-assistant.web.app"; // Stable base fallback
+      const fallbackUrl = "https://esevadraft.in"; // Stable base fallback
       return `${fallbackUrl}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
     }
     return endpoint;
@@ -67,7 +67,11 @@ export default function DownloadSection() {
       setLatestVersionData(data);
       
       // Compare versions
-      const cleanVer = (v: string) => v.replace(/[^0-9.]/g, '').split('.').map(Number);
+      const cleanVer = (v: string) => {
+        let cleaned = v.replace(/[^0-9.]/g, '');
+        cleaned = cleaned.replace(/^\.+|\.+$/g, '');
+        return cleaned.split('.').filter(Boolean).map(Number);
+      };
       const curParts = cleanVer(currentVersion);
       const latParts = cleanVer(data.version);
       
@@ -106,8 +110,9 @@ export default function DownloadSection() {
       } catch (err) {
         console.error("Failed to read App version", err);
       }
-      checkForUpdates();
     }
+    // Check for updates unconditionally to fetch latest direct download url on web/app
+    checkForUpdates();
   }, [isElectron]);
 
   const startDownloadUpdate = () => {
@@ -331,7 +336,7 @@ export default function DownloadSection() {
             className="flex items-center gap-3 mb-6"
           >
             <div className="px-4 py-1.5 bg-blue-600 rounded-full text-[10px] font-black uppercase tracking-widest text-white shadow-md">
-              v{LATEST_VERSION} - LATEST
+              v{latestVersionData?.version || LATEST_VERSION} - LATEST
             </div>
           </motion.div>
           
@@ -346,7 +351,7 @@ export default function DownloadSection() {
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              onClick={() => handleDownload(WINDOWS_DOWNLOAD_URL)}
+              onClick={() => handleDownload(latestVersionData?.downloadUrl || WINDOWS_DOWNLOAD_URL)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-5 rounded-[2rem] font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 shadow-2xl shadow-blue-500/20 cursor-pointer"
             >
               <Monitor size={20} />

@@ -12,6 +12,13 @@ const getApiUrl = (endpoint: string) => {
     const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
     return `${cleanBase}${cleanEndpoint}`;
   }
+  const isElectron = typeof window !== 'undefined' && 
+     ((window as any).process?.versions?.electron || 
+      navigator.userAgent.toLowerCase().indexOf(' electron/') > -1);
+  if (window.location.protocol === 'file:' || isElectron) {
+    const fallbackUrl = "https://esevadraft.in";
+    return `${fallbackUrl}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+  }
   return endpoint;
 };
 

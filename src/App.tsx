@@ -94,6 +94,34 @@ export default function App() {
 
   const [activeCustomerId, setActiveCustomerId] = useState<string | null>(() => localStorage.getItem("ACTIVE_CUSTOMER_ID"));
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [downloadUrl, setDownloadUrl] = useState(`https://github.com/kumaran434/esevai-assistant/releases/download/v${packageInfo.version}/esevadraft.Setup.${packageInfo.version}.exe`);
+
+  useEffect(() => {
+    const fetchLatestVersion = async () => {
+      try {
+        const baseUrl = import.meta.env.VITE_SERVER_URL || "";
+        const endpoint = "/api/latest-version";
+        let apiFetchUrl = endpoint;
+        if (baseUrl) {
+          const cleanBase = baseUrl.endsWith("/") ? baseUrl.slice(0, -1) : baseUrl;
+          apiFetchUrl = `${cleanBase}${endpoint}`;
+        } else if (typeof window !== 'undefined' && window.location.protocol === 'file:') {
+          apiFetchUrl = `https://esevadraft.in${endpoint}`;
+        }
+        
+        const response = await fetch(apiFetchUrl);
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.downloadUrl) {
+            setDownloadUrl(data.downloadUrl);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch latest version in App.tsx", err);
+      }
+    };
+    fetchLatestVersion();
+  }, []);
 
   useEffect(() => {
     const unsubscribe = customerService.subscribeToCustomers((list) => {
@@ -644,7 +672,7 @@ export default function App() {
             </p>
             <div className="flex flex-col gap-4 relative z-10">
               <a
-                href={`https://github.com/kumaran434/esevai-assistant/releases/download/v${packageInfo.version}/esevadraft.Setup.${packageInfo.version}.exe`}
+                href={downloadUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full py-5 bg-white text-blue-600 rounded-2xl font-black text-xs text-center uppercase tracking-[0.2em] hover:bg-slate-50 transition-all shadow-xl active:scale-95"
