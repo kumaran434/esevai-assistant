@@ -130,6 +130,17 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    if (activeTabId) {
+      setTimeout(() => {
+        const activeTabEl = document.getElementById(`tab-btn-${activeTabId}`);
+        if (activeTabEl) {
+          activeTabEl.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+        }
+      }, 50);
+    }
+  }, [activeTabId]);
+
   const activeCustomer = customers.find(c => c.id === activeCustomerId) || null;
 
   useEffect(() => {
@@ -461,12 +472,13 @@ export default function App() {
               </div>
 
               {/* Seamless Chrome Tabs List */}
-              <div className="flex items-end overflow-x-auto gap-[3px] px-1 h-full max-w-[calc(100vw-390px)] no-scrollbar">
+              <div className="flex-1 min-w-0 flex items-end overflow-x-auto gap-[3px] px-1 h-full no-scrollbar">
                 {tabs.map((tab) => {
                   const isActive = activeTabId === tab.id;
                   return (
                     <div
                       key={tab.id}
+                      id={`tab-btn-${tab.id}`}
                       onClick={() => {
                         setActiveTabId(tab.id);
                         setActivePortal(tab.name);

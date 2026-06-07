@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ExternalLink, Globe, Shield, CreditCard, FileText, UserCheck, Map, Plus, Trash2, X, Link as LinkIcon, Save, Sparkles, AlertCircle, Key, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { ExternalLink, Globe, Shield, CreditCard, FileText, UserCheck, Map, Plus, Trash2, X, Link as LinkIcon, Save, Sparkles, AlertCircle, Key, Eye, EyeOff, AlertTriangle, GripVertical, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
@@ -71,6 +71,123 @@ export default function Portals({ onTabChange, onOpenPortal }: PortalsProps) {
   const [passwordInput, setPasswordInput] = useState('');
   const [autoLoginInput, setAutoLoginInput] = useState(true);
   const [showPasswordMap, setShowPasswordMap] = useState<Record<string, boolean>>({});
+
+  const [orderedPortals, setOrderedPortals] = useState<any[]>([]);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    // 1. Get default portals flat
+    const flatDefaults = defaultPortals.flatMap(cat => 
+      cat.links.map(link => ({
+        ...link,
+        id: link.name,
+        category: cat.category,
+        isCustom: false
+      }))
+    );
+
+    // 2. Get custom portals flat
+    const flatCustoms = customPortals.map(p => ({
+      name: p.name,
+      url: p.url,
+      description: p.description || 'Custom Portal Link',
+      icon: LinkIcon,
+      id: p.id || p.name,
+      category: p.category,
+      isCustom: true
+    }));
+
+    const combined = [...flatDefaults, ...flatCustoms];
+
+    // 3. Load saved order from localStorage
+    const savedOrder = localStorage.getItem('portal_order_v2');
+    if (savedOrder) {
+      try {
+        const orderIds = JSON.parse(savedOrder) as string[];
+        
+        combined.sort((a, b) => {
+          const idxA = orderIds.indexOf(a.id);
+          const idxB = orderIds.indexOf(b.id);
+          
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          if (idxA !== -1) return -1;
+          if (idxB !== -1) return 1;
+          return 0;
+        });
+      } catch (e) {
+        console.error("Failed to parse saved portal order", e);
+      }
+    }
+    setOrderedPortals(combined);
+  }, [customPortals]);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    const sourceIndexStr = e.dataTransfer.getData('text/plain');
+    if (!sourceIndexStr) return;
+    const sourceIndex = parseInt(sourceIndexStr, 10);
+    
+    if (sourceIndex !== targetIndex) {
+      const newList = [...orderedPortals];
+      const [draggedItem] = newList.splice(sourceIndex, 1);
+      newList.splice(targetIndex, 0, draggedItem);
+      
+      setOrderedPortals(newList);
+      
+      const orderIds = newList.map(item => item.id);
+      localStorage.setItem('portal_order_v2', JSON.stringify(orderIds));
+    }
+    
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleResetOrder = () => {
+    if (confirm('வரிசையை பழையபடி மாற்ற விரும்புகிறீர்களா? (Are you sure you want to reset the portal order?)')) {
+      localStorage.removeItem('portal_order_v2');
+      const flatDefaults = defaultPortals.flatMap(cat => 
+        cat.links.map(link => ({
+          ...link,
+          id: link.name,
+          category: cat.category,
+          isCustom: false
+        }))
+      );
+      const flatCustoms = customPortals.map(p => ({
+        name: p.name,
+        url: p.url,
+        description: p.description || 'Custom Portal Link',
+        icon: LinkIcon,
+        id: p.id || p.name,
+        category: p.category,
+        isCustom: true
+      }));
+      setOrderedPortals([...flatDefaults, ...flatCustoms]);
+    }
+  };
 
   const isElectron = typeof window !== 'undefined' && 
     ((window as any).process?.versions?.electron || 
@@ -390,6 +507,9 @@ export default function Portals({ onTabChange, onOpenPortal }: PortalsProps) {
           <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">Quick access to common government services</p>
         </div>
         <div className="flex flex-wrap gap-3 mt-4">
+          <button onClick={handleResetOrder} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-3 rounded-2xl text-xs font-black flex items-center gap-2 transition-all uppercase tracking-widest border border-slate-200">
+            <RefreshCw size={15} /><span>பழைய வரிசைக்கு மாற்ற (Reset)</span>
+          </button>
           <button onClick={() => setIsCredsModalOpen(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-2xl text-xs font-black flex items-center gap-2 transition-all uppercase tracking-widest shadow-lg shadow-indigo-600/20">
             <Key size={15} /><span>உள்நுழைவுச் சாவிகள் (Login Keys)</span>
           </button>
@@ -399,46 +519,86 @@ export default function Portals({ onTabChange, onOpenPortal }: PortalsProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-4">
-        {allCategories.map((group, idx) => (
-          <div key={idx} className="space-y-4">
-            <h3 className="text-xs font-black text-blue-600 uppercase tracking-[0.2em] ml-2">{group.category}</h3>
-            <div className="space-y-3">
-              {group.links.map((link: any, lIdx) => {
-                const portalId = link.id || link.name;
-                const hasCreds = !!allCredentials[portalId];
-                return (
-                  <div key={lIdx} className="relative group">
-                    <motion.button onClick={() => handleOpenPortal(link.url, link.name)} whileHover={{ scale: 1.01, x: 4 }} className="w-full flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 hover:border-blue-600 shadow-sm hover:shadow-md transition-all text-left">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                          <link.icon size={20} />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-bold text-slate-900 leading-none text-sm">{link.name}</h4>
-                            {hasCreds && (
-                              <span className="bg-emerald-50 text-emerald-600 flex items-center gap-1 text-[8px] font-black uppercase px-2 py-0.5 rounded-full border border-emerald-200">
-                                <Key size={8} /> Auto-fill
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-[9px] text-slate-400 font-bold mt-1 uppercase tracking-tight">{link.description || 'Quick Link'}</p>
-                        </div>
-                      </div>
-                      <ExternalLink size={14} className="text-slate-300 group-hover:text-blue-600 flex-shrink-0" />
-                    </motion.button>
-                    {link.id && (
-                      <button onClick={(e) => { e.stopPropagation(); handleDelete(link.id!); }} className="absolute -top-2 -right-2 w-8 h-8 bg-red-50 text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border-2 border-white shadow-md hover:bg-red-500 hover:text-white">
-                        <Trash2 size={14} />
-                      </button>
-                    )}
+      {/* Guide Banner in Pure Tamil */}
+      <div className="mx-4 p-4 bg-sky-50 border border-sky-100 rounded-2xl flex items-center gap-3 text-sky-850">
+        <Sparkles size={18} className="text-sky-600 shrink-0 animate-pulse" />
+        <p className="text-xs font-medium leading-relaxed">
+          <strong>வழிமுறை:</strong> சேவைகளை உங்கள் விருப்பப்படி மாற்றி அமைக்க, கார்டுகளின் மேல் உள்ள சாம்பல் நிறக் குறியைப் பிடித்து இழுத்து (Drag & Drop) தேவையான இடத்தில் வைத்துக் கொள்ளவும். நீங்கள் அடிக்கடி பயன்படுத்தும் பக்கங்களை முதல் இடத்திற்கு மாற்ற முடியும்.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-4">
+        {orderedPortals.map((link, idx) => {
+          const portalId = link.id || link.name;
+          const hasCreds = !!allCredentials[portalId];
+          const isDraggingThis = idx === draggedIndex;
+          const isDragOverThis = idx === dragOverIndex;
+
+          return (
+            <div
+              key={portalId}
+              draggable="true"
+              onDragStart={(e) => handleDragStart(e, idx)}
+              onDragOver={(e) => handleDragOver(e, idx)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, idx)}
+              onDragEnd={handleDragEnd}
+              className={`relative group transition-all duration-200 cursor-grab active:cursor-grabbing select-none rounded-2xl border-2 ${
+                isDraggingThis ? "opacity-30 border-dashed border-indigo-400 bg-indigo-50/20 scale-95" : "border-transparent"
+              } ${
+                isDragOverThis ? "border-2 border-dashed border-sky-500 bg-sky-50/40 translate-y-[-4px] shadow-lg scale-[1.01]" : ""
+              }`}
+            >
+              <motion.button
+                onClick={() => handleOpenPortal(link.url, link.name)}
+                whileHover={{ scale: 1.01 }}
+                className="w-full flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 hover:border-indigo-600 shadow-sm hover:shadow-md transition-all text-left"
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  {/* Grip Icon for Draggability */}
+                  <div className="text-slate-350 hover:text-slate-500 cursor-grab flex-shrink-0">
+                    <GripVertical size={16} />
                   </div>
-                );
-              })}
+
+                  <div className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-colors flex-shrink-0">
+                    <link.icon size={20} />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-extrabold text-slate-800 leading-none text-sm truncate max-w-[170px]" title={link.name}>
+                        {link.name}
+                      </h4>
+                      {hasCreds && (
+                        <span className="bg-emerald-50 text-emerald-600 flex items-center gap-1 text-[8px] font-black uppercase px-2 py-0.5 rounded-full border border-emerald-200">
+                          <Key size={8} /> Auto-fill
+                        </span>
+                      )}
+                    </div>
+                    {/* Badge showing category */}
+                    <span className="inline-block text-[8px] font-extrabold tracking-wider text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100">
+                      {link.category}
+                    </span>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tight truncate" title={link.description}>
+                      {link.description || 'Quick Link'}
+                    </p>
+                  </div>
+                </div>
+                <ExternalLink size={14} className="text-slate-350 group-hover:text-indigo-600 flex-shrink-0 ml-2" />
+              </motion.button>
+              {link.isCustom && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(link.id!);
+                  }}
+                  className="absolute -top-2 -right-2 w-8 h-8 bg-red-50 text-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border-2 border-white shadow-md hover:bg-red-500 hover:text-white"
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <AnimatePresence>
