@@ -34,52 +34,111 @@ function setupSession(mainWindow) {
     const fileName = item.getFilename();
     const parentWin = BrowserWindow.fromWebContents(webContents) || mainWindow;
     
-    // Show a native Save Dialog to let the user choose where they want to save the document
-    const savePath = dialog.showSaveDialogSync(parentWin || null, {
-      title: 'ஆவணத்தைச் சேமிக்கவும்',
-      defaultPath: path.join(app.getPath('downloads'), fileName),
-      buttonLabel: 'சேமி',
-    });
+    // Auto-save to Downloads folder with unique name to prevent overwrites, matching Chrome behavior!
+    const defaultDownloadsPath = app.getPath('downloads');
+    const savePath = path.join(defaultDownloadsPath, fileName);
+    let finalSavePath = savePath;
+    let count = 1;
+    const ext = path.extname(fileName);
+    const base = path.basename(fileName, ext);
+    
+    while (fs.existsSync(finalSavePath)) {
+      finalSavePath = path.join(defaultDownloadsPath, `${base} (${count})${ext}`);
+      count++;
+    }
 
-    if (savePath) {
-      item.setSavePath(savePath);
-    } else {
-      item.cancel();
-      return;
+    item.setSavePath(finalSavePath);
+    const downloadId = 'dl-' + Date.now();
+
+    // Send initial start event
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('download-progress-update', {
+        id: downloadId,
+        name: fileName,
+        state: 'downloading',
+        percent: 0,
+        receivedBytes: 0,
+        totalBytes: item.getTotalBytes(),
+        path: finalSavePath
+      });
     }
 
     item.on('updated', (event, state) => {
-      if (state === 'interrupted') {
-        console.log('Download is interrupted but can be resumed');
+      if (state === 'progressing') {
+        if (item.isPaused()) {
+          console.log('Download is paused');
+        } else {
+          const total = item.getTotalBytes();
+          const received = item.getReceivedBytes();
+          const percent = total > 0 ? Math.round((received / total) * 100) : 0;
+          
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('download-progress-update', {
+              id: downloadId,
+              name: fileName,
+              state: 'downloading',
+              percent: percent,
+              receivedBytes: received,
+              totalBytes: total,
+              path: finalSavePath
+            });
+          }
+        }
+      } else if (state === 'interrupted') {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('download-progress-update', {
+            id: downloadId,
+            name: fileName,
+            state: 'interrupted',
+            percent: 0,
+            receivedBytes: item.getReceivedBytes(),
+            totalBytes: item.getTotalBytes(),
+            path: finalSavePath
+          });
+        }
       }
     });
 
     item.once('done', (event, state) => {
       if (state === 'completed') {
         const filePath = item.getSavePath();
+        const total = item.getTotalBytes();
         
-        // Show a beautiful notification dialog to let them open or show the file
-        const option = dialog.showMessageBoxSync(parentWin || null, {
-          type: 'info',
-          title: 'பதிவிறக்கம் செய்யப்பட்டது',
-          message: `ஆவணம் வெற்றிகரமாகப் பதிவிறக்கம் செய்யப்பட்டது!`,
-          detail: `கோப்பு: ${path.basename(filePath)}`,
-          buttons: ['கோப்பைத் திறக்கவும் (Open File)', 'கோப்புறையைக் காட்டவும் (Show in Folder)', 'சரி (OK)'],
-          defaultId: 2,
-          cancelId: 2
-        });
-
-        if (option === 0) {
-          shell.openPath(filePath).catch(err => {
-            console.error('Error opening file:', err);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('download-progress-update', {
+            id: downloadId,
+            name: fileName,
+            state: 'completed',
+            percent: 100,
+            receivedBytes: total,
+            totalBytes: total,
+            path: filePath
           });
-        } else if (option === 1) {
-          shell.showItemInFolder(filePath);
         }
       } else if (state === 'cancelled') {
-        // Cancelled by user - no message needed
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('download-progress-update', {
+            id: downloadId,
+            name: fileName,
+            state: 'cancelled',
+            percent: 0,
+            receivedBytes: 0,
+            totalBytes: 0,
+            path: ''
+          });
+        }
       } else {
-        dialog.showErrorBox('பதிவிறக்கப் பிழை', `ஆவணத்தைப் பதிவிறக்குவதில் தோல்வி ஏற்பட்டது.\nநிலை: ${state}`);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('download-progress-update', {
+            id: downloadId,
+            name: fileName,
+            state: 'failed',
+            percent: 0,
+            receivedBytes: 0,
+            totalBytes: 0,
+            path: ''
+          });
+        }
       }
     });
   });

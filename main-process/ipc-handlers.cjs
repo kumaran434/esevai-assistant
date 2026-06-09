@@ -11,19 +11,33 @@ let portalWin = null;
 let assistantView = null;
 let lastFile = null;
 
+function checkIsDownloadOrPdf(urlStr) {
+  const lower = urlStr.toLowerCase();
+  
+  // Web Pages/Forms should NEVER be treated as downloads even if they contain keywords in their path
+  if (lower.includes('.xhtml') || 
+      lower.includes('.html') || 
+      lower.includes('.htm') || 
+      lower.includes('.jsp') || 
+      lower.includes('.asp') || 
+      lower.includes('.aspx') || 
+      lower.includes('.php')) {
+    return false;
+  }
+
+  return lower.endsWith('.pdf') || 
+         lower.endsWith('.zip') || 
+         lower.endsWith('.docx') || 
+         lower.endsWith('.xlsx') || 
+         lower.includes('pdf') || 
+         lower.includes('download') ||
+         lower.includes('receipt') ||
+         lower.includes('certificate');
+}
+
 function handleNewWindowOpen(url, webContents) {
   try {
-    const lowerUrl = url.toLowerCase();
-    
-    // Check if it's a PDF, document or zip file download
-    const isDownloadOrPdf = lowerUrl.endsWith('.pdf') || 
-                            lowerUrl.endsWith('.zip') || 
-                            lowerUrl.endsWith('.docx') || 
-                            lowerUrl.endsWith('.xlsx') || 
-                            lowerUrl.includes('pdf') || 
-                            lowerUrl.includes('download') ||
-                            lowerUrl.includes('receipt') ||
-                            lowerUrl.includes('certificate');
+    const isDownloadOrPdf = checkIsDownloadOrPdf(url);
 
     if (isDownloadOrPdf) {
       try {
@@ -288,14 +302,7 @@ function setupIpcHandlers(mainWindow) {
     newView.setAutoResize({ width: true, height: true });
 
     newView.webContents.setWindowOpenHandler(({ url: childUrl }) => {
-      const isDownloadOrPdf = childUrl.toLowerCase().endsWith('.pdf') || 
-                              childUrl.toLowerCase().endsWith('.zip') || 
-                              childUrl.toLowerCase().endsWith('.docx') || 
-                              childUrl.toLowerCase().endsWith('.xlsx') ||
-                              childUrl.toLowerCase().includes('pdf') || 
-                              childUrl.toLowerCase().includes('download') ||
-                              childUrl.toLowerCase().includes('receipt') ||
-                              childUrl.toLowerCase().includes('certificate');
+      const isDownloadOrPdf = checkIsDownloadOrPdf(childUrl);
 
       if (isDownloadOrPdf) {
         try {
@@ -311,15 +318,7 @@ function setupIpcHandlers(mainWindow) {
 
     // Intercept standard page navigations that are downloads (like receipt PDFs/forms)
     newView.webContents.on('will-navigate', (event, navigationUrl) => {
-      const lower = navigationUrl.toLowerCase();
-      const isDownloadOrPdf = lower.endsWith('.pdf') || 
-                              lower.endsWith('.zip') || 
-                              lower.endsWith('.docx') || 
-                              lower.endsWith('.xlsx') || 
-                              lower.includes('pdf') || 
-                              lower.includes('download') ||
-                              lower.includes('receipt') ||
-                              lower.includes('certificate');
+      const isDownloadOrPdf = checkIsDownloadOrPdf(navigationUrl);
       
       if (isDownloadOrPdf) {
         event.preventDefault();
@@ -328,6 +327,40 @@ function setupIpcHandlers(mainWindow) {
         } catch (err) {
           console.error('Failed navigation direct download in BrowserView:', err);
         }
+      }
+    });
+
+    // Notify React frontend about tab loading states to display progress bars
+    newView.webContents.on('did-start-loading', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('tab-loading-state', { id: id, loading: true, progress: 30 });
+      }
+    });
+
+    newView.webContents.on('did-stop-loading', () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('tab-loading-state', { id: id, loading: false, progress: 100 });
+      }
+    });
+
+    // Track active page title and actual loaded URL (useful when redirects happen or users click links)
+    newView.webContents.on('did-navigate', (e, pageUrl) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        const title = newView.webContents.getTitle() || 'இணையதளப் பக்கம்';
+        mainWindow.webContents.send('tab-url-changed', { id: id, url: pageUrl, title: title });
+      }
+    });
+
+    newView.webContents.on('did-navigate-in-page', (e, pageUrl) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        const title = newView.webContents.getTitle() || 'இணையதளப் பக்கம்';
+        mainWindow.webContents.send('tab-url-changed', { id: id, url: pageUrl, title: title });
+      }
+    });
+
+    newView.webContents.on('page-title-updated', (e, title) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('tab-title-changed', { id: id, title: title });
       }
     });
 
@@ -485,15 +518,7 @@ function setupIpcHandlers(mainWindow) {
 
     // Intercept navigation downloads on portal window
     portalWin.webContents.on('will-navigate', (event, navigationUrl) => {
-      const lower = navigationUrl.toLowerCase();
-      const isDownloadOrPdf = lower.endsWith('.pdf') || 
-                              lower.endsWith('.zip') || 
-                              lower.endsWith('.docx') || 
-                              lower.endsWith('.xlsx') || 
-                              lower.includes('pdf') || 
-                              lower.includes('download') ||
-                              lower.includes('receipt') ||
-                              lower.includes('certificate');
+      const isDownloadOrPdf = checkIsDownloadOrPdf(navigationUrl);
       
       if (isDownloadOrPdf) {
         event.preventDefault();

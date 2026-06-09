@@ -23,7 +23,8 @@ import {
   CheckSquare,
   Download,
   FolderOpen,
-  Trash2
+  Trash2,
+  MessageSquare,
 } from "lucide-react";
 import { Customer } from "../types";
 import { isElectron, getIpcRenderer } from "../lib/electron-mock";
@@ -35,6 +36,7 @@ interface ProfileWorkspaceProps {
   onCancel: () => void;
   onSelectTool?: (toolId: string, currentData: any) => void;
   onDeleteDocument?: (docId: string) => Promise<void>;
+  onOpenPortal?: (url: string, name: string) => void;
 }
 
 export default function ProfileWorkspace({
@@ -43,7 +45,8 @@ export default function ProfileWorkspace({
   onSave,
   onCancel,
   onSelectTool,
-  onDeleteDocument
+  onDeleteDocument,
+  onOpenPortal
 }: ProfileWorkspaceProps) {
   // Form fields state
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
@@ -204,6 +207,14 @@ export default function ProfileWorkspace({
       icon: Languages,
       color: "bg-green-100 text-green-700 border-green-200",
       description: "ஆங்கில விவரங்களை தமிழுக்கு உடனே மாற்றவும்."
+    },
+    {
+      id: "whatsapp-web",
+      name: "வாட்ஸ்ஆப் வெப்",
+      sub: "WhatsApp Web",
+      icon: MessageSquare,
+      color: "bg-emerald-100 text-emerald-700 border-emerald-200",
+      description: "வாடிக்கையாளரிடம் இருந்து விவரங்களை உடனே பெற இதைப் பயன்படுத்தவும்."
     }
   ];
 
@@ -227,6 +238,14 @@ export default function ProfileWorkspace({
   };
 
   const handleToolShortcutClick = async (toolId: string) => {
+    if (toolId === "whatsapp-web") {
+      if (onOpenPortal) {
+        onOpenPortal("https://web.whatsapp.com/", "WhatsApp Web");
+      } else {
+        window.open("https://web.whatsapp.com/", "_blank");
+      }
+      return;
+    }
     // Trigger parent callback to open selected tool in main workspace and save latest profile data
     if (onSelectTool) {
       onSelectTool(toolId, formData);

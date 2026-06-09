@@ -1,39 +1,92 @@
 const { autoUpdater } = require('electron-updater');
-const { dialog } = require('electron');
+const { dialog, app } = require('electron');
+
+// Configure autoUpdater settings
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
 
 function setupAutoUpdate(win) {
-  // பிழைகள் ஏற்பட்டால் பயன்பாடு செயலிழப்பதைத் தடுக்க பாதுகாப்புத் தர்க்கம்
+  // Only search and apply updates in packaged/production builds
+  if (!app.isPackaged) {
+    console.log('[AutoUpdate] Development mode detected - auto-update check skipped.');
+    return;
+  }
+
+  console.log('[AutoUpdate] Initializing auto-updater event listeners...');
+
+  // 1. Error handling
   autoUpdater.on('error', (error) => {
-    console.error('புதுப்பிப்பு பிழை:', error);
+    console.error('[AutoUpdate] புதுப்பிப்பு பிழை (Update Error):', error);
   });
 
-  // புதிய பதிப்பு கண்டறியப்படும்போது பயனருக்கு அறிவிப்பு காட்டுதல்
-  autoUpdater.on('update-available', () => {
-    dialog.showMessageBox(win, {
-      type: 'info',
-      title: 'புதுப்பிப்பு கிடைத்துவிட்டது',
-      message: 'புதிய புதுப்பிப்பு கண்டறியப்பட்டுள்ளது. இப்போது பின்னணியில் பதிவிறக்கம் செய்யப்படுகிறது.',
-      buttons: ['சரி']
-    });
+  // 2. Checking for updates
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[AutoUpdate] புதுப்பிப்புகள் சரிபார்க்கப்படுகின்றன (Checking for updates)...');
   });
 
-  // பதிவிறக்கி முடிக்கப்பட்ட பிறகு பயனருக்குத் தெரிவித்து நிறுவுதல்
-  autoUpdater.on('update-downloaded', () => {
-    dialog.showMessageBox(win, {
-      type: 'info',
-      title: 'புதுப்பிப்பு தயார்',
-      message: 'புதிய பதிப்பு பதிவிறக்கம் செய்யப்பட்டு தயார் நிலையில் உள்ளது. பயன்பாடு இப்போது மீண்டும் தொடங்கப்படும்.',
-      buttons: ['நிறுவவும்']
-    }).then(() => {
-      autoUpdater.quitAndInstall();
-    });
+  // 3. New update available
+  autoUpdater.on('update-available', (info) => {
+    console.log('[AutoUpdate] புதிய பதிப்பு கிடைத்துள்ளது (Update available):', info.version);
+    if (win && !win.isDestroyed()) {
+      dialog.showMessageBox(win, {
+        type: 'info',
+        title: 'புதிய அப்டேட் கிடைத்துள்ளது',
+        message: `பதிப்பு ${info.version} கண்டறியப்பட்டுள்ளது. இது பின்னணியில் தானாகவே பதிவிறக்கம் செய்யப்படுகிறது. பதிவிறக்கம் முடிந்ததும் உங்களுக்கு அறிவிக்கப்படும்.`,
+        buttons: ['சரி']
+      }).catch(err => console.error('[AutoUpdate] Dialog error:', err));
+    }
   });
 
-  // புதுப்பிப்புகளைச் சரிபார்க்கும் செயல்முறை
+  // 4. Update not available
+  autoUpdater.on('update-not-available', (info) => {
+    console.log('[AutoUpdate] புதிய பதிப்புகள் எதுவும் இல்லை (Update not available):', info.version);
+  });
+
+  // 5. Download progress updates
+  autoUpdater.on('download-progress', (progressObj) => {
+    console.log(`[AutoUpdate] பதிவிறக்கம் ஆகிறது: ${progressObj.percent.toFixed(2)}% (${progressObj.transferred}/${progressObj.total})`);
+  });
+
+  // 6. Update download completed & ready to install
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log('[AutoUpdate] பதிவிறக்கம் வெற்றிகரமாக முடிந்தது (Update downloaded):', info.version);
+    
+    const showInstallPrompt = () => {
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'புதுப்பிப்பு தயார்',
+        message: `பதிப்பு ${info.version} வெற்றிகரமாகப் பதிவிறக்கப்பட்டது! செயலியை இப்போது நிறுவி மறுதொடக்கம் செய்ய விரும்புகிறீர்களா?`,
+        buttons: ['நிறுவவும் (Install Now)', 'பிறகு (Later)'],
+        defaultId: 0,
+        cancelId: 1
+      }).then((result) => {
+        if (result.response === 0) {
+          console.log('[AutoUpdate] User chose to install. Quitting and installing...');
+          // Arguments: isSilent = false, isForceRunAfter = true
+          autoUpdater.quitAndInstall(false, true);
+        } else {
+          console.log('[AutoUpdate] User postponed the installation.');
+        }
+      }).catch(err => {
+        console.error('[AutoUpdate] showMessageBox error:', err);
+        // Fallback: auto-install anyway
+        autoUpdater.quitAndInstall(false, true);
+      });
+    };
+
+    if (win && !win.isDestroyed()) {
+      showInstallPrompt();
+    } else {
+      console.log('[AutoUpdate] Main window is gone or destroyed. Installing automatically...');
+      autoUpdater.quitAndInstall(false, true);
+    }
+  });
+
+  // Check for updates
   try {
     autoUpdater.checkForUpdatesAndNotify();
   } catch (err) {
-    console.error('புதுப்பிப்புகளைச் சரிபார்க்க முடியவில்லை:', err);
+    console.error('[AutoUpdate] checkForUpdatesAndNotify failure:', err);
   }
 }
 

@@ -39,6 +39,7 @@ import {
   User,
   Users,
   Hand,
+  MessageCircle,
 } from "lucide-react";
 import {
   extractDetailsFromDocuments,
@@ -71,6 +72,7 @@ interface AssistantOverlayProps {
   portalName?: string | null;
   onClose?: () => void;
   sidebarWidth?: number;
+  onOpenPortal?: (url: string, name: string) => void;
 }
 
 // Optimized Memoized Component to prevent unnecessary re-renders during app-level state changes
@@ -80,6 +82,7 @@ const AssistantOverlay = React.memo(
     portalName,
     onClose,
     sidebarWidth,
+    onOpenPortal,
   }: AssistantOverlayProps) => {
     const containerRef = React.useRef<HTMLDivElement>(null);
     const [containerWidth, setContainerWidth] = useState(400);
@@ -263,6 +266,12 @@ const AssistantOverlay = React.memo(
         name: "Translator",
         desc: "Tamil/English",
         icon: <Languages size={20} />,
+      },
+      {
+        id: "whatsapp-web",
+        name: "WhatsApp Web (வாட்ஸ்அப்)",
+        desc: "Get customer docs & details",
+        icon: <MessageCircle size={20} />,
       },
     ];
 
@@ -1798,6 +1807,14 @@ const AssistantOverlay = React.memo(
                       <button
                         key={tool.id}
                         onClick={() => {
+                          if (tool.id === "whatsapp-web") {
+                            if (onOpenPortal) {
+                              onOpenPortal("https://web.whatsapp.com/", "WhatsApp Web");
+                            } else {
+                              window.open("https://web.whatsapp.com/", "_blank");
+                            }
+                            return;
+                          }
                           setSelectedToolId(tool.id);
                           setActiveToolIds([tool.id]);
                           setToolUploadedFiles([]);

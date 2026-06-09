@@ -63,12 +63,14 @@ export default function Dashboard({
   onBrowsePortals, 
   onTabChange,
   activeCustomerId = null,
-  onSelectCustomer
+  onSelectCustomer,
+  onOpenPortal
 }: { 
   onBrowsePortals?: () => void,
   onTabChange?: (tab: string) => void,
   activeCustomerId?: string | null,
-  onSelectCustomer?: (id: string | null) => void
+  onSelectCustomer?: (id: string | null) => void,
+  onOpenPortal?: (url: string, name: string) => void
 }) {
   const { t, language } = useLanguage();
 
@@ -549,6 +551,14 @@ export default function Dashboard({
       icon: Languages,
       color: "from-green-500 to-teal-600 bg-green-50 text-green-700 border-green-200",
       description: "விவரங்களை ஆங்கிலத்தில் இருந்து தமிழுக்கு உடனுக்குடன் துல்லியமாக மொழிபெயர்க்கவும்."
+    },
+    {
+      id: "whatsapp-web",
+      name: "வாட்ஸ்ஆப் வெப் (WhatsApp Web)",
+      sub: "Customer Chat & Documents",
+      icon: MessageSquare,
+      color: "from-emerald-500 to-green-600 bg-emerald-50 text-emerald-700 border-emerald-200",
+      description: "வாடிக்கையாளரிடம் இருந்து கோப்புகள் மற்றும் தகவல்களைப் பகிர அல்லது பெற இதைப் பயன்படுத்தவும்."
     }
   ];
 
@@ -671,6 +681,7 @@ export default function Dashboard({
             setIsAddingProfile(false);
             setActiveWorkspaceTool(toolId);
           }}
+          onOpenPortal={onOpenPortal}
         />
       ) : isEditingProfile && editingCustomer ? (
         <ProfileWorkspace
@@ -718,6 +729,7 @@ export default function Dashboard({
               setActiveWorkspaceTool(toolId);
             }
           }}
+          onOpenPortal={onOpenPortal}
         />
       ) : !activeCustomer ? (
         // ==========================================
@@ -1142,7 +1154,17 @@ export default function Dashboard({
                       <button
                         key={tool.id}
                         type="button"
-                        onClick={() => setActiveWorkspaceTool(tool.id)}
+                        onClick={() => {
+                          if (tool.id === "whatsapp-web") {
+                            if (onOpenPortal) {
+                              onOpenPortal("https://web.whatsapp.com/", "WhatsApp Web");
+                            } else {
+                              window.open("https://web.whatsapp.com/", "_blank");
+                            }
+                            return;
+                          }
+                          setActiveWorkspaceTool(tool.id);
+                        }}
                         className={`w-full text-left rounded-xl p-2.5 border transition-all flex items-center gap-2.5 cursor-pointer group ${
                           isSelected 
                             ? "border-blue-500 bg-blue-50 text-blue-900" 

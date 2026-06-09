@@ -14,7 +14,8 @@ import {
   Lock,
   X,
   Zap,
-  CheckCircle2
+  CheckCircle2,
+  MessageSquare,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "../lib/translations";
@@ -31,7 +32,7 @@ import PassportResizer from "./tools/PassportResizer";
 import DataExtractionTool from "./tools/DataExtractionTool";
 import WordEditor from "./tools/WordEditor";
 
-type ToolId = 'pdf-compress' | 'id-card' | 'signature' | 'pdf-to-image' | 'image-to-pdf' | 'pdf-merge' | 'translator' | 'passport-resizer' | 'data-extraction' | 'word-editor';
+type ToolId = 'pdf-compress' | 'id-card' | 'signature' | 'pdf-to-image' | 'image-to-pdf' | 'pdf-merge' | 'translator' | 'passport-resizer' | 'data-extraction' | 'word-editor' | 'whatsapp-web';
 
 interface ToolItem {
   readonly id: ToolId;
@@ -45,11 +46,13 @@ interface ToolItem {
 export default function DocumentTools({ 
   activeProfile, 
   onSyncSignature, 
-  onTabChange 
+  onTabChange,
+  onOpenPortal
 }: { 
   activeProfile?: any; 
   onSyncSignature?: (b64: string) => void;
   onTabChange?: (tab: string) => void;
+  onOpenPortal?: (url: string, name: string) => void;
 }) {
   const { language, t } = useLanguage();
   const [selectedTool, setSelectedTool] = useState<ToolId | null>(() => {
@@ -161,6 +164,14 @@ export default function DocumentTools({
       color: 'bg-red-50 text-red-500',
       plan: 'FREE'
     },
+    { 
+      id: 'whatsapp-web', 
+      label: language === 'ta' ? 'வாட்ஸ்ஆப் வெப் (WhatsApp)' : 'WhatsApp Web', 
+      description: language === 'ta' ? 'வாடிக்கையாளரின் கோப்புகள் மற்றும் விவரங்களைப் பெற வாட்ஸ்அப் வெப் திறக்கவும்.' : 'Open WhatsApp Web to chat & get customer files.', 
+      icon: MessageSquare,
+      color: 'bg-emerald-50 text-emerald-600',
+      plan: 'FREE'
+    },
   ] as const;
 
   const renderToolComponent = (id: ToolId) => {
@@ -219,6 +230,14 @@ export default function DocumentTools({
   };
 
   const handleToolClick = (tool: ToolItem) => {
+    if (tool.id === 'whatsapp-web') {
+      if (onOpenPortal) {
+        onOpenPortal("https://web.whatsapp.com/", "WhatsApp Web");
+      } else {
+        window.open("https://web.whatsapp.com/", "_blank");
+      }
+      return;
+    }
     if (tool.plan === 'PREMIUM' && subscribedPlan !== 'PREMIUM') {
       setLockedTool(tool);
     } else {

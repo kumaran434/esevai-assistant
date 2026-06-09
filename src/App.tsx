@@ -13,6 +13,12 @@ import {
   RotateCw,
   Plus,
   Lock,
+  Download,
+  CheckCircle2,
+  Folder,
+  AlertCircle,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { auth } from "./lib/firebase";
 import Layout from "./components/Layout";
@@ -60,6 +66,64 @@ export default function App() {
   const [activePortalUrl, setActivePortalUrl] = useState<string | null>(null);
   const [tabs, setTabs] = useState<{ id: string; name: string; url: string }[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [tabLoadingStates, setTabLoadingStates] = useState<Record<string, { loading: boolean; progress: number }>>({});
+  const [downloads, setDownloads] = useState<Array<{ id: string; name: string; state: string; percent: number; path: string }>>([]);
+  const [showDownloadsDropdown, setShowDownloadsDropdown] = useState(false);
+
+  // Sync state variables with IPC Event Listeners
+  useEffect(() => {
+    if (!isDesktop || !ipc || typeof ipc.on !== 'function') return;
+
+    const handleLoadingState = (event: any, data: { id: string; loading: boolean; progress: number }) => {
+      setTabLoadingStates(prev => ({
+        ...prev,
+        [data.id]: { loading: data.loading, progress: data.progress }
+      }));
+    };
+
+    const handleUrlChanged = (event: any, data: { id: string; url: string; title: string }) => {
+      setTabs(prev => prev.map(tab => tab.id === data.id ? { ...tab, url: data.url, name: data.title || tab.name } : tab));
+      if (activeTabId === data.id) {
+        setActivePortalUrl(data.url);
+        setActivePortal(data.title);
+      }
+    };
+
+    const handleTitleChanged = (event: any, data: { id: string; title: string }) => {
+      setTabs(prev => prev.map(tab => tab.id === data.id ? { ...tab, name: data.title } : tab));
+      if (activeTabId === data.id) {
+        setActivePortal(data.title);
+      }
+    };
+
+    const handleDownloadProgress = (event: any, data: { id: string; name: string; state: string; percent: number; path: string }) => {
+      setDownloads(prev => {
+        const index = prev.findIndex(d => d.id === data.id);
+        if (index > -1) {
+          const updated = [...prev];
+          updated[index] = data;
+          return updated;
+        } else {
+          setShowDownloadsDropdown(true); // Pop-up top bar downloads list on new download automatically
+          return [data, ...prev];
+        }
+      });
+    };
+
+    ipc.on('tab-loading-state', handleLoadingState);
+    ipc.on('tab-url-changed', handleUrlChanged);
+    ipc.on('tab-title-changed', handleTitleChanged);
+    ipc.on('download-progress-update', handleDownloadProgress);
+
+    return () => {
+      if (typeof ipc.removeListener === 'function') {
+        ipc.removeListener('tab-loading-state', handleLoadingState);
+        ipc.removeListener('tab-url-changed', handleUrlChanged);
+        ipc.removeListener('tab-title-changed', handleTitleChanged);
+        ipc.removeListener('download-progress-update', handleDownloadProgress);
+      }
+    };
+  }, [isDesktop, ipc, activeTabId]);
   const { sidebarWidth, setSidebarWidth, isResizing, setIsResizing } =
     useSidebar(activePortal);
 
@@ -424,6 +488,7 @@ export default function App() {
               portalName={activePortal}
               onClose={closePortal}
               sidebarWidth={sidebarWidth}
+              onOpenPortal={openPortal}
             />
           </div>
         </aside>
@@ -493,7 +558,11 @@ export default function App() {
                           : "bg-[#0f172a] text-slate-400 hover:bg-slate-800/40 hover:text-slate-200 border-r border-slate-800/20"
                       }`}
                     >
-                      <Globe size={11} className={`${isActive ? "text-indigo-400 animate-pulse" : "text-slate-500"} shrink-0`} />
+                      {tabLoadingStates[tab.id]?.loading ? (
+                        <Loader2 size={11} className="text-blue-400 animate-spin shrink-0 animate-pulse" />
+                      ) : (
+                        <Globe size={11} className={`${isActive ? "text-indigo-400 animate-pulse" : "text-slate-500"} shrink-0`} />
+                      )}
                       <span className="truncate max-w-[120px] uppercase tracking-wider text-[10px]/none leading-none">
                         {tab.name}
                       </span>
@@ -524,7 +593,17 @@ export default function App() {
             </div>
 
             {/* TIER 2: NAVIGATION & ADDRESS BAR (Seamlessly connected to Active Tab!) */}
-            <div className="h-12 bg-[#1e293b] border-b border-indigo-500/20 flex items-center px-4 gap-4 w-full shadow-md">
+            <div className="h-12 bg-[#1e293b] border-b border-indigo-500/20 flex items-center px-4 gap-4 w-full shadow-md relative">
+              {/* Dynamic Chrome-like Linear Progress Bar */}
+              {activeTabId && tabLoadingStates[activeTabId || ""]?.loading && (
+                <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-slate-800 z-[100] overflow-hidden">
+                  <div 
+                    className="h-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)] transition-all duration-300 ease-out" 
+                    style={{ width: `${tabLoadingStates[activeTabId || ""]?.progress || 20}%` }}
+                  />
+                </div>
+              )}
+
               {/* Back / Forward / Reload Controls */}
               <div className="flex items-center gap-1.5">
                 <button
@@ -577,13 +656,124 @@ export default function App() {
               </form>
 
               {/* Connection and Action Buttons */}
-              <div className="flex items-center gap-3 shrink-0 ml-auto leading-none">
+              <div className="flex items-center gap-3 shrink-0 ml-auto leading-none relative">
                 {/* Secure Badge */}
-                <div className="hidden lg:flex items-center gap-2 bg-black/20 border border-white/5 rounded-xl px-3 py-1.5 select-none shrink-0">
+                <div className="hidden lg:flex items-center gap-2 bg-black/20 border border-white/5 rounded-xl px-3 py-1.5 select-none shrink-0 border-indigo-500/10">
                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)] shrink-0" />
                   <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest leading-none">
                     SECURE
                   </span>
+                </div>
+
+                {/* Chrome Style Download Tracker Button & Floating Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowDownloadsDropdown(!showDownloadsDropdown)}
+                    className={`p-1.5 rounded-xl border flex items-center justify-center relative cursor-pointer select-none transition-all duration-300 ${
+                      downloads.some(d => d.state === 'downloading')
+                        ? "bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/30 text-blue-400 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.3)]"
+                        : downloads.length > 0
+                        ? "bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-300"
+                        : "hidden"
+                    }`}
+                    title="பதிவிறக்கம் செய்தவை (Downloads)"
+                  >
+                    <Download size={15} />
+                    
+                    {/* Active Download Progress Count Badge */}
+                    {downloads.some(d => d.state === 'downloading') && (
+                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[8px] font-bold text-white shadow-md animate-bounce">
+                        {downloads.filter(d => d.state === 'downloading').length}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Floating Downloads Dropdown */}
+                  {showDownloadsDropdown && downloads.length > 0 && (
+                    <div className="absolute right-0 mt-3 w-80 bg-[#0f172a] border border-indigo-950/40 rounded-2xl shadow-2xl z-[999] overflow-hidden text-left text-slate-200">
+                      <div className="p-3 border-b border-indigo-950/40 flex items-center justify-between bg-slate-950">
+                        <span className="font-bold text-[10px] text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                          <Download size={11} className="text-blue-500 animate-bounce" />
+                          பதிவிறக்கங்கள் (Downloads)
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setDownloads([]);
+                              setShowDownloadsDropdown(false);
+                            }}
+                            className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
+                            title="பட்டியலை அழி (Clear list)"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                          <button
+                            onClick={() => setShowDownloadsDropdown(false)}
+                            className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                          >
+                            <X size={11} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="max-h-80 overflow-y-auto divide-y divide-slate-800/20 scrollbar-thin scrollbar-thumb-slate-800">
+                        {downloads.map(dl => (
+                          <div key={dl.id} className="p-3 flex flex-col gap-2 hover:bg-slate-800/10 transition-colors">
+                            <div className="flex items-start justify-between gap-1.5">
+                              <span className="text-[11px] font-semibold text-slate-100 truncate flex-1 leading-normal" title={dl.name}>
+                                {dl.name}
+                              </span>
+                              
+                              {/* State Indicators */}
+                              {dl.state === 'downloading' && (
+                                <Loader2 size={11} className="text-blue-400 animate-spin shrink-0 mt-0.5" />
+                              )}
+                              {dl.state === 'completed' && (
+                                <CheckCircle2 size={11} className="text-emerald-500 shrink-0 mt-0.5" />
+                              )}
+                              {(dl.state === 'failed' || dl.state === 'cancelled') && (
+                                <AlertCircle size={11} className="text-rose-500 shrink-0 mt-0.5" />
+                              )}
+                            </div>
+
+                            {/* Progress bar or action links */}
+                            {dl.state === 'downloading' ? (
+                              <div className="space-y-1">
+                                <div className="h-1 w-full bg-slate-800 rounded-full overflow-hidden">
+                                  <div 
+                                    className="h-full bg-blue-500 transition-all duration-300 rounded-full animate-pulse"
+                                    style={{ width: `${dl.percent}%` }}
+                                  />
+                                </div>
+                                <div className="flex justify-between text-[8px] font-mono text-slate-400 leading-none">
+                                  <span>{dl.percent}%</span>
+                                  <span>பதிவிறக்கம் செய்யப்படுகிறது...</span>
+                                </div>
+                              </div>
+                            ) : dl.state === 'completed' ? (
+                              <div className="flex gap-1.5 mt-0.5">
+                                <button
+                                  onClick={() => {
+                                    if (isDesktop && dl.path) {
+                                      ipc.send('show-item-in-folder', dl.path);
+                                    }
+                                  }}
+                                  className="flex-1 flex items-center justify-center gap-1 text-[9px] font-black uppercase tracking-wider py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-500/20 hover:border-blue-600 transition-all cursor-pointer"
+                                >
+                                  <Folder size={10} />
+                                  கோப்புறையைக் காட்டு (Open folder)
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-[9px] text-rose-500">
+                                {dl.state === 'cancelled' ? 'பதிவிறக்கம் ரத்துசெய்யப்பட்டது' : 'பதிவிறக்கம் தோல்வி அடைந்தது'}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <button
@@ -735,7 +925,12 @@ export default function App() {
             <Portals onTabChange={setActiveTab} onOpenPortal={openPortal} />
           </div>
           <div className={activeTab === "tools" ? "block" : "hidden"}>
-            <DocumentTools onTabChange={setActiveTab} onSyncSignature={() => {}} activeProfile={activeCustomer} />
+            <DocumentTools 
+              onTabChange={setActiveTab} 
+              onSyncSignature={() => {}} 
+              activeProfile={activeCustomer} 
+              onOpenPortal={openPortal}
+            />
           </div>
           <div className={activeTab === "download" ? "block" : "hidden"}>
             <DownloadSection />
