@@ -19,6 +19,8 @@ import {
   AlertCircle,
   Trash2,
   Loader2,
+  MessageSquare,
+  Minus,
 } from "lucide-react";
 import { auth } from "./lib/firebase";
 import Layout from "./components/Layout";
@@ -32,8 +34,10 @@ import Auth from "./components/Auth";
 import UserProfile from "./components/UserProfile";
 import Pricing from "./components/Pricing";
 import ActiveCustomerSidebar from "./components/ActiveCustomerSidebar";
+import WhatsAppTool from "./components/tools/WhatsAppTool";
 import { motion, AnimatePresence } from "motion/react";
 import { reportAppError } from "./lib/firebase-utils";
+import { useLanguage } from "./lib/translations";
 import packageInfo from "../package.json";
 import { customerService } from "./services/customerService";
 import { Customer } from "./types";
@@ -55,6 +59,7 @@ const isElectronApp = () => {
 export default function App() {
   const isAssistantOverlay = window.location.hash === "#/assistant-overlay";
   const ipc = getIpcRenderer();
+  const { language } = useLanguage();
   const isDesktop =
     isElectronApp() ||
     window.location.hostname === "localhost" ||
@@ -127,6 +132,14 @@ export default function App() {
   const { sidebarWidth, setSidebarWidth, isResizing, setIsResizing } =
     useSidebar(activePortal);
 
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [lastSidebarWidth, setLastSidebarWidth] = useState(25);
+
+  const handleCollapseSidebar = () => {
+    setLastSidebarWidth(sidebarWidth > 5 ? sidebarWidth : 25);
+    setIsSidebarCollapsed(true);
+  };
+
   // States
   const [agentId, setAgentId] = useState<string | null>(null);
   const [agentName, setAgentName] = useState<string | null>(null);
@@ -135,11 +148,120 @@ export default function App() {
   const [isNewTabMenuOpen, setIsNewTabMenuOpen] = useState(false);
   const [urlInputField, setUrlInputField] = useState("");
   const [dropdownUrlInput, setDropdownUrlInput] = useState("");
+  const [triggerDividerBlink, setTriggerDividerBlink] = useState(false);
+  const [isCreatingProfileDirectly, setIsCreatingProfileDirectly] = useState(false);
+  const [isWhatsAppFloatingOpen, setIsWhatsAppFloatingOpen] = useState(false);
+  const [wasWhatsAppFloatingOpened, setWasWhatsAppFloatingOpened] = useState(false);
+  const [whatsAppWidth, setWhatsAppWidth] = useState<number>(() => {
+    const saved = localStorage.getItem("WA_FLOATING_WIDTH_PX");
+    return saved ? parseInt(saved, 10) : 800;
+  });
+  const [whatsAppHeight, setWhatsAppHeight] = useState<number>(() => {
+    const saved = localStorage.getItem("WA_FLOATING_HEIGHT_PX");
+    return saved ? parseInt(saved, 10) : 660;
+  });
+
+  const [isResizingWAWidth, setIsResizingWAWidth] = useState(false);
+  const [isResizingWAHeight, setIsResizingWAHeight] = useState(false);
+  const [isResizingWACorner, setIsResizingWACorner] = useState(false);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizingWAWidth) {
+        const computedWidth = activePortal
+          ? e.clientX - 24
+          : window.innerWidth - 24 - e.clientX;
+        const clampedWidth = Math.max(380, Math.min(window.innerWidth - 48, computedWidth));
+        setWhatsAppWidth(clampedWidth);
+        localStorage.setItem("WA_FLOATING_WIDTH_PX", clampedWidth.toString());
+      }
+      if (isResizingWAHeight) {
+        // Since it is anchored at top-[90px], the height scales with the clientY position of the bottom edge.
+        const computedHeight = e.clientY - 90;
+        const clampedHeight = Math.max(300, Math.min(window.innerHeight - 120, computedHeight));
+        setWhatsAppHeight(clampedHeight);
+        localStorage.setItem("WA_FLOATING_HEIGHT_PX", clampedHeight.toString());
+      }
+      if (isResizingWACorner) {
+        const computedWidth = activePortal
+          ? e.clientX - 24
+          : window.innerWidth - 24 - e.clientX;
+        const clampedWidth = Math.max(380, Math.min(window.innerWidth - 48, computedWidth));
+        setWhatsAppWidth(clampedWidth);
+        localStorage.setItem("WA_FLOATING_WIDTH_PX", clampedWidth.toString());
+
+        const computedHeight = e.clientY - 90;
+        const clampedHeight = Math.max(300, Math.min(window.innerHeight - 120, computedHeight));
+        setWhatsAppHeight(clampedHeight);
+        localStorage.setItem("WA_FLOATING_HEIGHT_PX", clampedHeight.toString());
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingWAWidth(false);
+      setIsResizingWAHeight(false);
+      setIsResizingWACorner(false);
+    };
+
+    if (isResizingWAWidth || isResizingWAHeight || isResizingWACorner) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [isResizingWAWidth, isResizingWAHeight, isResizingWACorner, activePortal]);
+
+  const handleWidthResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingWAWidth(true);
+  };
+
+  const handleHeightResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingWAHeight(true);
+  };
+
+  const handleCornerResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingWACorner(true);
+  };
+
+  // Trigger divider blink effect when a portal becomes active/switches
+  useEffect(() => {
+    if (activePortal) {
+      setTriggerDividerBlink(true);
+      const timer = setTimeout(() => {
+        setTriggerDividerBlink(false);
+      }, 4000); // Pulse for 4 seconds so the user can easily spot it
+      return () => clearTimeout(timer);
+    }
+  }, [activePortal]);
 
   // Sync address bar input on portal change
   useEffect(() => {
     setUrlInputField(activePortalUrl || "");
   }, [activePortalUrl]);
+
+  // Sync sidebar collapsibility with Electron main process
+  useEffect(() => {
+    if (isDesktop && ipc && !isResizing) {
+      const targetPercent = isSidebarCollapsed ? 0 : sidebarWidth / 100;
+      ipc.send('update-sidebar-width', targetPercent);
+    }
+  }, [isDesktop, ipc, isSidebarCollapsed, sidebarWidth, isResizing]);
+
+  // Sync floating WhatsApp drawer state with Electron main process
+  useEffect(() => {
+    if (isDesktop && ipc) {
+      ipc.send('update-whatsapp-floating-state', {
+        isOpen: isWhatsAppFloatingOpen,
+        width: whatsAppWidth
+      });
+    }
+  }, [isDesktop, ipc, isWhatsAppFloatingOpen, whatsAppWidth]);
 
   // Monitor Firebase Auth State
   useEffect(() => {
@@ -475,8 +597,8 @@ export default function App() {
       <div className="h-screen w-screen flex bg-[#0f172a] overflow-hidden select-none relative">
         {/* Left Side: Assistant */}
         <aside
-          style={{ width: `${sidebarWidth}%` }}
-          className={`min-w-[200px] max-w-[80%] h-full flex flex-col bg-white z-20 relative border-r transform-gpu overflow-hidden backface-visibility-hidden will-change-[width] ${
+          style={{ width: isSidebarCollapsed ? '0px' : `${sidebarWidth}%` }}
+          className={`${isSidebarCollapsed ? "hidden" : "min-w-[200px] max-w-[80%] h-full flex flex-col bg-white z-20 relative border-r transform-gpu overflow-hidden backface-visibility-hidden will-change-[width]"} ${
             isResizing
               ? "transition-none select-none border-r-blue-500 ring-4 ring-blue-500/10"
               : "transition-none border-slate-200"
@@ -489,20 +611,29 @@ export default function App() {
               onClose={closePortal}
               sidebarWidth={sidebarWidth}
               onOpenPortal={openPortal}
+              onCollapse={handleCollapseSidebar}
             />
           </div>
         </aside>
 
         {/* Resizable Handle - Sleek Modern Divider */}
-        <div
-          className={`w-2 h-full cursor-col-resize z-30 relative flex items-center justify-center transition-all duration-300 group select-none ${isResizing ? "bg-indigo-600" : "bg-slate-200 border-x border-slate-300/10 hover:bg-slate-300"}`}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            setIsResizing(true);
-            document.body.style.cursor = "col-resize";
-            ipc.send("set-resizing-state", true);
-          }}
-        >
+        {!isSidebarCollapsed && (
+          <div
+            className={`w-2 h-full cursor-col-resize z-30 relative flex items-center justify-center transition-all duration-300 group select-none ${
+              isResizing 
+                ? "bg-indigo-600" 
+                : triggerDividerBlink
+                ? "bg-indigo-500 shadow-[0_0_20px_rgba(79,70,229,0.9)] ring-4 ring-indigo-500/40 animate-pulse"
+                : "bg-slate-200 border-x border-slate-300/10 hover:bg-slate-300"
+            }`}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setIsSidebarCollapsed(false);
+              setIsResizing(true);
+              document.body.style.cursor = "col-resize";
+              ipc.send("set-resizing-state", true);
+            }}
+          >
           {/* Invisible Hit Area Expansion */}
           {isResizing && (
             <div className="absolute inset-y-0 -left-32 -right-32 z-[100000] cursor-col-resize" />
@@ -510,16 +641,32 @@ export default function App() {
 
           {/* Sleek Minimal Grip Indicator */}
           <div
-            className={`w-9 h-9 rounded-full border border-slate-200 bg-white shadow-lg flex items-center justify-center gap-[3px] transition-all duration-300 pointer-events-none z-[110] ${isResizing ? "scale-110 opacity-100 border-indigo-500" : "opacity-0 group-hover:opacity-100 group-hover:scale-105"}`}
+            className={`w-11 h-11 rounded-full border bg-white shadow-2xl flex flex-col items-center justify-center transition-all duration-300 pointer-events-none z-[110] ${
+              isResizing 
+                ? "scale-110 opacity-100 border-indigo-500 ring-4 ring-indigo-500/20" 
+                : triggerDividerBlink
+                ? "opacity-100 scale-110 border-indigo-500 ring-12 ring-indigo-500/30 animate-[bounce_1.5s_infinite] bg-indigo-50"
+                : "opacity-0 group-hover:opacity-100 group-hover:scale-105 border-slate-200"
+            }`}
           >
-            <div
-              className={`w-[2px] h-4 rounded-full transition-colors duration-300 ${isResizing ? "bg-indigo-600" : "bg-slate-400"}`}
-            />
-            <div
-              className={`w-[2px] h-4 rounded-full transition-colors duration-300 ${isResizing ? "bg-indigo-600" : "bg-slate-400"}`}
-            />
+            {/* Inside grip circles */}
+            <div className="flex gap-[3px] items-center justify-center">
+              <div
+                className={`w-[2px] h-4 rounded-full transition-colors duration-300 ${isResizing || triggerDividerBlink ? "bg-indigo-600" : "bg-slate-400"}`}
+              />
+              <div
+                className={`w-[2px] h-4 rounded-full transition-colors duration-300 ${isResizing || triggerDividerBlink ? "bg-indigo-600" : "bg-slate-400"}`}
+              />
+            </div>
+            {/* Help Indicator Bubble */}
+            {triggerDividerBlink && (
+              <div className="absolute -top-7 px-2 py-0.5 bg-indigo-600 text-[8px] font-black tracking-widest text-white rounded-md whitespace-nowrap shadow-md uppercase">
+                {language === "ta" ? "இழுக்கவும்" : "DRAG ME"}
+              </div>
+            )}
           </div>
         </div>
+      )}
 
         {/* Right Side: Website Content */}
         <main
@@ -578,17 +725,17 @@ export default function App() {
                     </div>
                   );
                 })}
-              </div>
 
-              {/* THE CHROME PLUS (+) BUTTON FOR QUICK CHROME POPUP (Moved outside of scroll area so the dropdown won't clip) */}
-              <div className="relative shrink-0 pb-1.5 self-end z-50">
-                <button
-                  onClick={() => openPortal("newtab", "புதிய பக்கம்")}
-                  className="w-7 h-7 hover:bg-white/10 text-slate-300 hover:text-white rounded-lg flex items-center justify-center transition-all cursor-pointer shadow-sm bg-white/5"
-                  title="புதிய போர்டல் திறக்க (New Tab)"
-                >
-                  <Plus size={15} />
-                </button>
+                {/* THE CHROME PLUS (+) BUTTON is now inside the tabs list, sitting right next to the last tab */}
+                <div className="relative shrink-0 flex items-center h-[34px] self-end z-50 ml-2">
+                  <button
+                    onClick={() => openPortal("newtab", "புதிய பக்கம்")}
+                    className="w-7 h-7 hover:bg-white/10 text-slate-300 hover:text-white rounded-lg flex items-center justify-center transition-all cursor-pointer shadow-sm bg-white/5"
+                    title="புதிய போர்டல் திறக்க (New Tab)"
+                  >
+                    <Plus size={15} />
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -606,6 +753,22 @@ export default function App() {
 
               {/* Back / Forward / Reload Controls */}
               <div className="flex items-center gap-1.5">
+                {isSidebarCollapsed && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSidebarCollapsed(false);
+                      if (sidebarWidth <= 5) {
+                        setSidebarWidth(lastSidebarWidth || 20);
+                      }
+                    }}
+                    title={language === "ta" ? "கருவிகள் பட்டியலைக் காட்டுக" : "Show Tools Sidebar"}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[10px] font-black uppercase tracking-wider transition-all scale-102 hover:scale-105 shadow-md mr-1.5 cursor-pointer"
+                  >
+                    <Zap size={11} />
+                    <span>{language === "ta" ? "கருவிகள் (Tools)" : "Show Tools"}</span>
+                  </button>
+                )}
                 <button
                   onClick={() => isDesktop && ipc.send("portal-back")}
                   title="முந்தைய பக்கம் (Back)"
@@ -776,6 +939,23 @@ export default function App() {
                   )}
                 </div>
 
+                {/* 🟢 WHATSAPP DIRECT TOGGLE BUTTON (IN PORTAL HEADER TOOLBAR) 🟢 */}
+                <button
+                  onClick={() => {
+                    setIsWhatsAppFloatingOpen(!isWhatsAppFloatingOpen);
+                    setWasWhatsAppFloatingOpened(true);
+                  }}
+                  className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl border transition-all duration-300 shadow-md cursor-pointer select-none text-[10px] font-black uppercase tracking-wider leading-none ${
+                    isWhatsAppFloatingOpen
+                      ? "bg-emerald-600 border-emerald-500 text-white hover:bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.35)]"
+                      : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white"
+                  }`}
+                  title="வாட்ஸ்ஆப் வெப் (WhatsApp Web)"
+                >
+                  <MessageSquare size={12} fill="currentColor" />
+                  <span>வாட்ஸ்ஆப் (WhatsApp)</span>
+                </button>
+
                 <button
                   onClick={minimizePortal}
                   className="group flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-indigo-500/10 hover:bg-indigo-600 text-indigo-400 hover:text-white transition-all duration-300 border border-indigo-500/10 hover:border-indigo-600 shadow-md cursor-pointer select-none"
@@ -798,9 +978,9 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex-1 relative bg-slate-50">
+          <div className="flex-1 relative bg-slate-50 overflow-hidden min-h-0">
             {activePortalUrl === "newtab" ? (
-              <div className="w-full h-full p-6 overflow-y-auto bg-slate-50 relative">
+              <div className="absolute inset-0 p-6 overflow-y-auto bg-slate-50">
                 <Portals onOpenPortal={(url, name) => updateCurrentTab(url, name)} />
               </div>
             ) : isDesktop ? (
@@ -919,6 +1099,8 @@ export default function App() {
               onSelectCustomer={handleSelectCustomer}
               onBrowsePortals={() => setActiveTab("portals")}
               onTabChange={setActiveTab}
+              isAddingProfileOpen={isCreatingProfileDirectly}
+              onAddProfileOpenClose={() => setIsCreatingProfileDirectly(false)}
             />
           </div>
           <div className={activeTab === "portals" ? "block" : "hidden"}>
@@ -981,6 +1163,10 @@ export default function App() {
           photoURL: auth.currentUser?.photoURL,
         }}
         onLogout={handleLogout}
+        onCreateProfileClick={() => {
+          setActiveTab("dashboard");
+          setIsCreatingProfileDirectly(true);
+        }}
       >
         {renderContent()}
       </Layout>
@@ -1048,7 +1234,7 @@ export default function App() {
       {renderCurrentView()}
 
       {activePortal === null && tabs.length > 0 && (
-        <div className="fixed bottom-6 right-6 z-[999]">
+        <div className="fixed bottom-6 right-24 z-[999]">
           <button
             onClick={resumeActivePortal}
             className="flex items-center gap-3 px-6 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-2xl border-2 border-white/20 select-none cursor-pointer transition-all active:scale-95 hover:shadow-indigo-500/20 shadow-indigo-600/35"
@@ -1059,6 +1245,164 @@ export default function App() {
             </span>
           </button>
         </div>
+      )}
+
+      {/* 🟢 WHATSAPP PERSISTENT FLOATING BUTTON AND DRAWER 🟢 */}
+      {agentId && (
+        <>
+          {/* Floating Action Button (FAB) */}
+          {!activePortal && (
+            <div className="fixed bottom-6 z-[1000000] right-6">
+              <motion.button
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  setIsWhatsAppFloatingOpen(!isWhatsAppFloatingOpen);
+                  setWasWhatsAppFloatingOpened(true);
+                }}
+                className="w-14 h-14 bg-emerald-600 hover:bg-emerald-500 text-white rounded-full flex items-center justify-center shadow-2xl relative cursor-pointer border-2 border-white focus:outline-none"
+                title="வாட்ஸ்ஆப் வெப் (WhatsApp Web)"
+              >
+                {isWhatsAppFloatingOpen ? (
+                  <X size={24} className="transition-transform duration-300" />
+                ) : (
+                  <MessageSquare size={24} fill="currentColor" />
+                )}
+                {/* Active green ping indicator */}
+                <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-green-400 border-2 border-white rounded-full animate-ping" />
+                <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 bg-green-400 border-2 border-white rounded-full" />
+              </motion.button>
+            </div>
+          )}
+
+          {/* Floating Drawer / Container with Direct DOM Persistence (display:none hides but keeps loaded) */}
+          {wasWhatsAppFloatingOpened && (
+            <div
+              className={`fixed top-[90px] bg-white rounded-3xl border border-slate-200/80 shadow-2xl overflow-hidden transform-gpu will-change-transform z-[999999] flex flex-col ${
+                activePortal ? "left-6 origin-top-left" : "right-6 origin-top-right"
+              } ${
+                (isResizingWAWidth || isResizingWAHeight || isResizingWACorner) ? "" : "transition-all duration-300"
+              } ${
+                isWhatsAppFloatingOpen
+                  ? "opacity-100 scale-100 translate-y-0 pointer-events-auto"
+                  : "opacity-0 scale-95 -translate-y-4 pointer-events-none"
+              }`}
+              style={{
+                height: `${whatsAppHeight}px`,
+                width: `${whatsAppWidth}px`,
+                maxHeight: "calc(100vh - 120px)",
+                maxWidth: "calc(100vw - 48px)"
+              }}
+            >
+              {/* 🖱️ Resizable Drag Handles (Placed inside the overflow-hidden container to avoid clipping) */}
+              {/* 1. Width resizing handle (Left or Right Edge depending on anchor) */}
+              {activePortal ? (
+                // Anchored left: drag handle is on the RIGHT edge
+                <div
+                  onMouseDown={handleWidthResizeMouseDown}
+                  className={`absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-emerald-500/30 transition-all z-[1051] ${
+                    isResizingWAWidth ? 'bg-emerald-500/50 shadow-inner' : 'bg-transparent'
+                  }`}
+                  title="அகலத்தை மாற்ற இழுக்கவும் (Drag right edge to resize width)"
+                />
+              ) : (
+                // Anchored right: drag handle is on the LEFT edge
+                <div
+                  onMouseDown={handleWidthResizeMouseDown}
+                  className={`absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-emerald-500/30 transition-all z-[1051] ${
+                    isResizingWAWidth ? 'bg-emerald-500/50 shadow-inner' : 'bg-transparent'
+                  }`}
+                  title="அகலத்தை மாற்ற இழுக்கவும் (Drag left edge to resize width)"
+                />
+              )}
+
+              {/* 2. Bottom Edge Handle (Height resizing - scaled downwards) */}
+              <div
+                onMouseDown={handleHeightResizeMouseDown}
+                className={`absolute bottom-0 left-0 right-0 h-2.5 cursor-ns-resize hover:bg-emerald-500/30 transition-all z-[1051] ${
+                  isResizingWAHeight ? 'bg-emerald-500/50 shadow-inner' : 'bg-transparent'
+                }`}
+                title="உயரத்தை மாற்ற இழுக்கவும் (Drag bottom edge to resize height)"
+              />
+
+              {/* 3. Corner Handle (Bottom-Left or Bottom-Right depending on anchor) */}
+              {activePortal ? (
+                // Anchored left: corner handle is on the BOTTOM-RIGHT
+                <div
+                  onMouseDown={handleCornerResizeMouseDown}
+                  className={`absolute bottom-0 right-0 w-6 h-6 cursor-se-resize hover:bg-emerald-500/40 transition-all z-[1052] rounded-br-3xl ${
+                    isResizingWACorner ? 'bg-emerald-500/70 shadow-md' : 'bg-transparent'
+                  }`}
+                  title="அளவை மாற்ற இழுக்கவும் (Drag corner to resize)"
+                />
+              ) : (
+                // Anchored right: corner handle is on the BOTTOM-LEFT
+                <div
+                  onMouseDown={handleCornerResizeMouseDown}
+                  className={`absolute bottom-0 left-0 w-6 h-6 cursor-sw-resize hover:bg-emerald-500/40 transition-all z-[1052] rounded-bl-3xl ${
+                    isResizingWACorner ? 'bg-emerald-500/70 shadow-md' : 'bg-transparent'
+                  }`}
+                  title="அளவை மாற்ற இழுக்கவும் (Drag corner to resize)"
+                />
+              )}
+
+              {/* Drawer Header */}
+              <div className="px-5 py-3.5 bg-[#0f172a] text-white flex flex-col sm:flex-row gap-3 sm:items-center justify-between shrink-0 select-none">
+                <div className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-xs font-black uppercase tracking-wider">
+                    வாட்ஸ்ஆப் (WhatsApp Web)
+                  </span>
+                </div>
+
+                {/* Resize Info Display */}
+                <div className="flex items-center gap-2 bg-slate-800/80 px-3 py-1 rounded-lg border border-slate-700/60">
+                  <span className="text-[10px] font-mono font-bold text-slate-300">
+                    {whatsAppWidth}px × {whatsAppHeight}px
+                  </span>
+                  <span className="text-[8px] font-black uppercase tracking-wider text-emerald-400 animate-pulse">
+                    முனைகளை இழுக்கவும்
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setIsWhatsAppFloatingOpen(false)}
+                    className="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/90 border border-slate-700/60 rounded-xl transition-all text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 cursor-pointer text-xs font-bold select-none"
+                    title="சுருக்கு (Minimize - Keeps WhatsApp active in background)"
+                  >
+                    <Minus size={14} />
+                    <span>சுருக்கு (Minimize)</span>
+                  </button>
+                  <button
+                    onClick={() => setIsWhatsAppFloatingOpen(false)}
+                    className="p-1.5 hover:bg-white/10 rounded-xl transition-all text-slate-300 hover:text-white cursor-pointer"
+                    title="மூடு (Close)"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Embedded Webview Container (Pointer events are disabled during drag so the internal iframe does not hijack mouse events) */}
+              <div className={`flex-1 min-h-0 bg-slate-50 flex flex-col overflow-hidden ${
+                (isResizingWAWidth || isResizingWAHeight || isResizingWACorner) ? 'pointer-events-none select-none' : ''
+              }`}>
+                <WhatsAppTool isNarrow={whatsAppWidth < 550} />
+              </div>
+
+              {/* Drawer Footer */}
+              <div className="px-4 py-2 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0 select-none">
+                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                  Always-On Persistence • பின்புலத்தில் இயங்கும்
+                </span>
+                <span className="text-[9px] text-slate-400 font-mono tracking-widest leading-none">
+                  PERSIST_WA
+                </span>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

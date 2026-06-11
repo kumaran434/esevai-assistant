@@ -14,7 +14,8 @@ import {
   UserCircle,
   Settings,
   Sparkles,
-  Terminal
+  Terminal,
+  UserPlus
 } from "lucide-react";
 import { useLanguage } from "../lib/translations";
 import { User } from 'firebase/auth';
@@ -29,9 +30,10 @@ interface LayoutProps {
     photoURL?: string | null;
   } | null;
   onLogout?: () => void;
+  onCreateProfileClick?: () => void;
 }
 
-export default function Layout({ children, activeTab, setActiveTab, user, onLogout }: LayoutProps) {
+export default function Layout({ children, activeTab, setActiveTab, user, onLogout, onCreateProfileClick }: LayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { language, setLanguage, t } = useLanguage();
   const [analyzing, setAnalyzing] = useState(false);
@@ -132,6 +134,28 @@ export default function Layout({ children, activeTab, setActiveTab, user, onLogo
               </button>
             );
           })}
+
+          {/* Quick Create Profile Button */}
+          <div className="pt-4 mt-4 border-t border-slate-800">
+            <button
+              onClick={() => {
+                if (onCreateProfileClick) onCreateProfileClick();
+              }}
+              className="w-full flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-extrabold text-sm transition-all shadow-md active:scale-95 cursor-pointer"
+              title={language === 'ta' ? 'புதிய சுயவிவரத்தை உருவாக்க' : 'Create New Profile'}
+            >
+              <UserPlus size={20} className="shrink-0" />
+              {isSidebarOpen && (
+                <motion.span 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="whitespace-nowrap font-medium text-sm"
+                >
+                  {language === 'ta' ? 'புதிய சுயவிவரம்' : 'New Profile'}
+                </motion.span>
+              )}
+            </button>
+          </div>
         </nav>
       </motion.aside>
 
@@ -193,6 +217,22 @@ export default function Layout({ children, activeTab, setActiveTab, user, onLogo
           >
             {children}
           </motion.div>
+        </div>
+
+        {/* Floating Action Button for Quick Add Profile */}
+        <div className="fixed bottom-6 right-6 z-[100] group">
+          <div className="absolute right-16 bottom-3 bg-slate-950 text-white text-[10px] font-black px-3 py-1.5 rounded-lg whitespace-nowrap shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none uppercase tracking-widest border border-slate-800">
+            {language === 'ta' ? 'உடனே புதிய சுயவிவரம் உருவாக்க' : 'Quick Create Profile'}
+          </div>
+          <button
+            onClick={() => {
+              if (onCreateProfileClick) onCreateProfileClick();
+            }}
+            className="w-14 h-14 bg-gradient-to-tr from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white rounded-full flex items-center justify-center shadow-2xl hover:scale-110 active:scale-95 transition-all cursor-pointer ring-4 ring-emerald-500/20 active:ring-emerald-500/40 relative overflow-hidden group"
+          >
+            <span className="absolute inset-0 bg-white/20 transform scale-0 group-hover:scale-100 transition-transform duration-350 rounded-full" />
+            <UserPlus size={22} className="relative z-10 transition-transform group-hover:rotate-12 duration-300" />
+          </button>
         </div>
       </main>
     </div>

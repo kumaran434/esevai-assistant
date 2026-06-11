@@ -57,6 +57,7 @@ import PdfMerger from "./tools/PdfMerger";
 import TranslatorTool from "./tools/TranslatorTool";
 import DataExtractionTool from "./tools/DataExtractionTool";
 import ProfileWorkspace from "./ProfileWorkspace";
+import WhatsAppTool from "./tools/WhatsAppTool";
 
 
 export default function Dashboard({ 
@@ -64,15 +65,28 @@ export default function Dashboard({
   onTabChange,
   activeCustomerId = null,
   onSelectCustomer,
-  onOpenPortal
+  onOpenPortal,
+  isAddingProfileOpen = false,
+  onAddProfileOpenClose
 }: { 
   onBrowsePortals?: () => void,
   onTabChange?: (tab: string) => void,
   activeCustomerId?: string | null,
   onSelectCustomer?: (id: string | null) => void,
-  onOpenPortal?: (url: string, name: string) => void
+  onOpenPortal?: (url: string, name: string) => void,
+  isAddingProfileOpen?: boolean,
+  onAddProfileOpenClose?: () => void
 }) {
   const { t, language } = useLanguage();
+
+  useEffect(() => {
+    if (isAddingProfileOpen) {
+      setIsAddingProfile(true);
+      if (onAddProfileOpenClose) {
+        onAddProfileOpenClose();
+      }
+    }
+  }, [isAddingProfileOpen]);
 
   const handleDownloadDocument = (doc: { url: string, fileName: string }) => {
     if (isElectron()) {
@@ -143,6 +157,13 @@ export default function Dashboard({
   
   // Tab/Tool state inside the Left Workspace
   const [activeWorkspaceTool, setActiveWorkspaceTool] = useState<string | null>(null);
+  const [wasWhatsAppEverOpenedInDash, setWasWhatsAppEverOpenedInDash] = useState(false);
+
+  useEffect(() => {
+    if (activeWorkspaceTool === "whatsapp-web") {
+      setWasWhatsAppEverOpenedInDash(true);
+    }
+  }, [activeWorkspaceTool]);
 
   // Active profile copy states
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -551,14 +572,6 @@ export default function Dashboard({
       icon: Languages,
       color: "from-green-500 to-teal-600 bg-green-50 text-green-700 border-green-200",
       description: "விவரங்களை ஆங்கிலத்தில் இருந்து தமிழுக்கு உடனுக்குடன் துல்லியமாக மொழிபெயர்க்கவும்."
-    },
-    {
-      id: "whatsapp-web",
-      name: "வாட்ஸ்ஆப் வெப் (WhatsApp Web)",
-      sub: "Customer Chat & Documents",
-      icon: MessageSquare,
-      color: "from-emerald-500 to-green-600 bg-emerald-50 text-emerald-700 border-emerald-200",
-      description: "வாடிக்கையாளரிடம் இருந்து கோப்புகள் மற்றும் தகவல்களைப் பகிர அல்லது பெற இதைப் பயன்படுத்தவும்."
     }
   ];
 
@@ -584,6 +597,8 @@ export default function Dashboard({
         return <PdfMerger />;
       case "translator":
         return <TranslatorTool />;
+      case "whatsapp-web":
+        return null;
       default:
         return null;
     }
@@ -1155,14 +1170,6 @@ export default function Dashboard({
                         key={tool.id}
                         type="button"
                         onClick={() => {
-                          if (tool.id === "whatsapp-web") {
-                            if (onOpenPortal) {
-                              onOpenPortal("https://web.whatsapp.com/", "WhatsApp Web");
-                            } else {
-                              window.open("https://web.whatsapp.com/", "_blank");
-                            }
-                            return;
-                          }
                           setActiveWorkspaceTool(tool.id);
                         }}
                         className={`w-full text-left rounded-xl p-2.5 border transition-all flex items-center gap-2.5 cursor-pointer group ${
@@ -1249,7 +1256,7 @@ export default function Dashboard({
 
             {/* RIGHT COLUMN: Primary Content display (வீச்சு 9/12) */}
             <div className="lg:col-span-9 xl:col-span-9.5">
-              {activeWorkspaceTool ? (
+              {activeWorkspaceTool && activeWorkspaceTool !== 'whatsapp-web' ? (
                 // Selected Tool workspace
                 <div className="bg-white border-2 border-slate-200 rounded-[2.5rem] shadow-xs overflow-hidden pb-8 animate-fadeIn">
                   <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
@@ -1278,7 +1285,7 @@ export default function Dashboard({
                     {renderWorkspaceTool()}
                   </div>
                 </div>
-              ) : (
+              ) : activeWorkspaceTool === 'whatsapp-web' ? null : (
                 // Profile Edit workspace
                 <div className="bg-white border-2 border-slate-200 rounded-[2.5rem] shadow-xs p-6 md:p-8 space-y-6 animate-fadeIn">
                   <div className="border-b pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1556,6 +1563,39 @@ export default function Dashboard({
                       Loading Customer Workspace...
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Persistent WhatsApp view to keep login and state alive with 0 reload delays */}
+              {wasWhatsAppEverOpenedInDash && (
+                <div className={activeWorkspaceTool === "whatsapp-web" ? "block" : "hidden"}>
+                  <div className="bg-white border-2 border-slate-200 rounded-[2.5rem] shadow-xs overflow-hidden pb-8 animate-fadeIn">
+                    <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <button 
+                          onClick={handleBackFromTool}
+                          className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-colors cursor-pointer border-0"
+                        >
+                          <ChevronLeft size={12} strokeWidth={3} /> {language === 'en' ? 'Back' : 'பின்னே'}
+                        </button>
+                        <span className="text-slate-400 font-bold">|</span>
+                        <h3 className="font-bold text-xs uppercase tracking-wider text-slate-200 flex items-center gap-2">
+                          {toolsList.find(t => t.id === "whatsapp-web")?.name}
+                        </h3>
+                      </div>
+                    </div>
+                    <div className="p-6">
+                      <div className="bg-blue-50/70 border border-blue-100 p-4 rounded-2xl mb-6 text-xs font-bold text-blue-700 flex items-center gap-2">
+                        <Zap size={14} className="text-blue-600 animate-pulse shrink-0" />
+                        {language === 'en' ? (
+                          <>Note: Documents created in this tool will be automatically linked to <b>{activeCustomer?.name || 'Customer'}</b> account!</>
+                        ) : (
+                          <>குறிப்பு: இந்த கருவியில் நீங்கள் உருவாக்கும் ஆவணங்கள் தங்களின் தற்போதைய வாடிக்கையாளர் <b>{activeCustomer?.name || 'வாடிக்கையாளர்'}</b> கணக்குடன் நேரடியாகத் தானாகவே இணைந்துவிடும்!</>
+                        )}
+                      </div>
+                      <WhatsAppTool isNarrow={false} />
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

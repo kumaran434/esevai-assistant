@@ -12,13 +12,6 @@ export function useSidebar(activePortal: string | null) {
     widthRef.current = sidebarWidth;
   }, [sidebarWidth]);
 
-  // Resize Listener - only sync when NOT actively dragging to prevent flickering
-  useEffect(() => {
-    if (activePortal && !isResizing) {
-       ipc.send('update-sidebar-width', sidebarWidth / 100);
-    }
-  }, [sidebarWidth, activePortal, ipc, isResizing]);
-
   // Dragging logic
   useEffect(() => {
     if (!isResizing) return;
@@ -38,8 +31,6 @@ export function useSidebar(activePortal: string | null) {
 
     const handleMouseUp = () => {
       setIsResizing(false);
-      // Use ref to get the absolute latest width even in this closure
-      ipc.send('update-sidebar-width', widthRef.current / 100);
       ipc.send('set-resizing-state', false);
       document.body.style.cursor = 'default';
     };

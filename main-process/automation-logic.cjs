@@ -70,6 +70,9 @@ ipcRenderer.on('fill-portal-credentials', (event, creds) => {
       }
 
       if (userInput && passInput) {
+        // Prevent hijacking focus if credentials are already filled correctly
+        if (userInput.value === creds.username && passInput.value === creds.password) return;
+
         userInput.focus();
         const nativeUserSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
         if (nativeUserSetter) {
@@ -80,6 +83,7 @@ ipcRenderer.on('fill-portal-credentials', (event, creds) => {
         userInput.dispatchEvent(new Event('input', { bubbles: true }));
         userInput.dispatchEvent(new Event('change', { bubbles: true }));
         userInput.dispatchEvent(new Event('blur', { bubbles: true }));
+        try { userInput.blur(); } catch (e) {}
 
         passInput.focus();
         const nativePassSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
@@ -91,6 +95,7 @@ ipcRenderer.on('fill-portal-credentials', (event, creds) => {
         passInput.dispatchEvent(new Event('input', { bubbles: true }));
         passInput.dispatchEvent(new Event('change', { bubbles: true }));
         passInput.dispatchEvent(new Event('blur', { bubbles: true }));
+        try { passInput.blur(); } catch (e) {}
 
         ipcRenderer.send('automation-technical-log', { 
           stage: 'AUTO_FILL_CREDENTIALS_SUCCESS', 
@@ -119,11 +124,7 @@ ipcRenderer.on('fill-portal-credentials', (event, creds) => {
           loginBtn.style.border = "3px solid #4f46e5";
           loginBtn.style.boxShadow = "0 0 15px rgba(79, 70, 229, 0.6)"; 
           
-          if (creds.autoLogin) {
-            setTimeout(() => {
-              loginBtn.click();
-            }, 800);
-          }
+          // Automatic clicking has been removed per user request: "just user name password mattum fill aanapothum"
         }
       }
     } catch (err) {}

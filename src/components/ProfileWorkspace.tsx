@@ -238,14 +238,6 @@ export default function ProfileWorkspace({
   };
 
   const handleToolShortcutClick = async (toolId: string) => {
-    if (toolId === "whatsapp-web") {
-      if (onOpenPortal) {
-        onOpenPortal("https://web.whatsapp.com/", "WhatsApp Web");
-      } else {
-        window.open("https://web.whatsapp.com/", "_blank");
-      }
-      return;
-    }
     // Trigger parent callback to open selected tool in main workspace and save latest profile data
     if (onSelectTool) {
       onSelectTool(toolId, formData);

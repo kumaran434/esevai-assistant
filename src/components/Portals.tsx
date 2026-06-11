@@ -414,24 +414,7 @@ export default function Portals({ onTabChange, onOpenPortal }: PortalsProps) {
   };
 
   const handleOpenPortal = (url: string, name: string) => {
-    // Check if configuration credentials exist for this portal (checks auto login availability)
-    const portalId = name;
-    const hasCreds = !!allCredentials[portalId] || Object.values(allCredentials).some((c: any) => c.name === name);
-
-    if (hasCreds) {
-      const currentCountStr = localStorage.getItem("AUTO_LOGIN_LIMIT_COUNT");
-      const currentCount = currentCountStr ? parseInt(currentCountStr, 10) : 0;
-
-      if (currentCount >= 3) {
-        setShowAutoLoginLimitModal(true);
-        return;
-      }
-
-      // Increment auto-login count
-      localStorage.setItem("AUTO_LOGIN_LIMIT_COUNT", (currentCount + 1).toString());
-    }
-
-    // Always prefer standard callback if available (for desktop split view)
+    // Always prefer standard callback if available (for desktop split view) - completely unlimited and free auto-fill
     if (onOpenPortal) {
       onOpenPortal(url, name);
     }

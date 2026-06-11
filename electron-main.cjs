@@ -1,4 +1,4 @@
-const { app, BrowserWindow, BrowserView, ipcMain, screen, session, dialog } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, screen, session, dialog, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const isDev = require('electron-is-dev');
@@ -11,16 +11,30 @@ const { injectDebugScripts, setupShortcuts } = require('./main-process/utils.cjs
 const { setupAutoUpdate } = require('./main-process/update-manager.cjs');
 
 function createWindow() {
+  const buildIcoPath = path.join(__dirname, 'build', 'icon.ico');
+  const buildPngPath = path.join(__dirname, 'build', 'icon.png');
+  const devIconPath = path.join(__dirname, 'src', 'assets', 'images', 'app_logo.png');
+
+  let iconInstance = undefined;
+  if (fs.existsSync(buildIcoPath)) {
+    iconInstance = nativeImage.createFromPath(buildIcoPath);
+  } else if (fs.existsSync(buildPngPath)) {
+    iconInstance = nativeImage.createFromPath(buildPngPath);
+  } else if (fs.existsSync(devIconPath)) {
+    iconInstance = nativeImage.createFromPath(devIconPath);
+  }
+
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
     backgroundColor: '#ffffff',
     title: `TN e-Gov AI Helper Desktop - ${isDev ? 'Dev' : 'Prod'}`,
-    icon: fs.existsSync(path.join(__dirname, 'build', 'icon.ico')) ? path.join(__dirname, 'build', 'icon.ico') : (fs.existsSync(path.join(__dirname, 'build', 'icon.png')) ? path.join(__dirname, 'build', 'icon.png') : undefined),
+    icon: iconInstance,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
       webSecurity: false,
+      webviewTag: true,
     }
   });
 

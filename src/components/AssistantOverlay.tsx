@@ -66,6 +66,7 @@ import TranslatorTool from "./tools/TranslatorTool";
 import PassportResizer from "./tools/PassportResizer";
 import DataExtractionTool from "./tools/DataExtractionTool";
 import ActiveCustomerSidebar from "./ActiveCustomerSidebar";
+import WhatsAppTool from "./tools/WhatsAppTool";
 
 interface AssistantOverlayProps {
   isEmbedded?: boolean;
@@ -73,6 +74,7 @@ interface AssistantOverlayProps {
   onClose?: () => void;
   sidebarWidth?: number;
   onOpenPortal?: (url: string, name: string) => void;
+  onCollapse?: () => void;
 }
 
 // Optimized Memoized Component to prevent unnecessary re-renders during app-level state changes
@@ -83,7 +85,9 @@ const AssistantOverlay = React.memo(
     onClose,
     sidebarWidth,
     onOpenPortal,
+    onCollapse,
   }: AssistantOverlayProps) => {
+    const { language } = useLanguage();
     const containerRef = React.useRef<HTMLDivElement>(null);
     const [containerWidth, setContainerWidth] = useState(400);
     const [scaleFactor, setScaleFactor] = useState(1);
@@ -143,6 +147,14 @@ const AssistantOverlay = React.memo(
       const initial = sessionStorage.getItem("assistant_tool_id");
       return initial ? [initial] : [];
     });
+
+    const [wasWhatsAppEverOpenedInAssistant, setWasWhatsAppEverOpenedInAssistant] = useState(false);
+
+    useEffect(() => {
+      if (activeToolIds.includes("whatsapp-web")) {
+        setWasWhatsAppEverOpenedInAssistant(true);
+      }
+    }, [activeToolIds]);
 
     const scrollableAreaRef = React.useRef<HTMLDivElement>(null);
 
@@ -278,9 +290,11 @@ const AssistantOverlay = React.memo(
     const currentTool = toolsList.find((t) => t.id === selectedToolId);
 
     const renderToolsWithStatePreservation = () => {
+      const whatsappToolObj = toolsList.find(t => t.id === "whatsapp-web");
       return (
         <div className="space-y-6">
           {activeToolIds.map((toolId) => {
+            if (toolId === "whatsapp-web") return null;
             const tool = toolsList.find(t => t.id === toolId);
             if (!tool) return null;
             return (
@@ -352,6 +366,45 @@ const AssistantOverlay = React.memo(
               </div>
             );
           })}
+
+          {/* Persistent WhatsApp Web representation */}
+          {wasWhatsAppEverOpenedInAssistant && whatsappToolObj && (
+            <div
+              className={activeToolIds.includes("whatsapp-web") ? "bg-white border border-slate-200/80 rounded-3xl p-4 shadow-sm relative space-y-4 block" : "hidden"}
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+                    {React.cloneElement(
+                      whatsappToolObj.icon as React.ReactElement,
+                      { size: 16 }
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <h4 className="text-xs font-black text-slate-800 uppercase tracking-tight truncate">
+                      {whatsappToolObj.name}
+                    </h4>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                      {whatsappToolObj.desc}
+                    </p>
+                  </div>
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={() => handleCloseTool("whatsapp-web")}
+                  className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-red-500 transition-colors shrink-0"
+                  title="Close Tool / கருவியை மூடு"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div>
+                <WhatsAppTool isNarrow={isNarrow} />
+              </div>
+            </div>
+          )}
         </div>
       );
     };
@@ -1730,6 +1783,15 @@ const AssistantOverlay = React.memo(
               )}
 
               <div className="flex items-center gap-1.5 shrink-0">
+                {onCollapse && (
+                  <button
+                    onClick={onCollapse}
+                    title={language === "ta" ? "கருவிகள் பட்டியலைச் சுருக்குக" : "Collapse Sidebar"}
+                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-xl transition-all"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setStage("tools");
@@ -1803,18 +1865,10 @@ const AssistantOverlay = React.memo(
                   </div>
 
                   <div className={isNarrow ? "space-y-2" : "space-y-4"}>
-                    {toolsList.map((tool) => (
+                    {toolsList.filter((t) => t.id !== "whatsapp-web").map((tool) => (
                       <button
                         key={tool.id}
                         onClick={() => {
-                          if (tool.id === "whatsapp-web") {
-                            if (onOpenPortal) {
-                              onOpenPortal("https://web.whatsapp.com/", "WhatsApp Web");
-                            } else {
-                              window.open("https://web.whatsapp.com/", "_blank");
-                            }
-                            return;
-                          }
                           setSelectedToolId(tool.id);
                           setActiveToolIds([tool.id]);
                           setToolUploadedFiles([]);
@@ -2780,7 +2834,7 @@ const AssistantOverlay = React.memo(
                   className={`grid ${isNarrow ? "grid-cols-2 gap-3" : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4"}`}
                 >
                   {toolsList
-                    .filter((t) => !activeToolIds.includes(t.id))
+                    .filter((t) => !activeToolIds.includes(t.id) && t.id !== "whatsapp-web")
                     .map((tool) => (
                       <button
                         key={tool.id}

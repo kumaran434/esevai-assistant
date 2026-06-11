@@ -16,6 +16,8 @@ import {
   Zap,
   CheckCircle2,
   MessageSquare,
+  GripVertical,
+  RefreshCw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "../lib/translations";
@@ -31,6 +33,7 @@ import TranslatorTool from "./tools/TranslatorTool";
 import PassportResizer from "./tools/PassportResizer";
 import DataExtractionTool from "./tools/DataExtractionTool";
 import WordEditor from "./tools/WordEditor";
+import WhatsAppTool from "./tools/WhatsAppTool";
 
 type ToolId = 'pdf-compress' | 'id-card' | 'signature' | 'pdf-to-image' | 'image-to-pdf' | 'pdf-merge' | 'translator' | 'passport-resizer' | 'data-extraction' | 'word-editor' | 'whatsapp-web';
 
@@ -58,6 +61,13 @@ export default function DocumentTools({
   const [selectedTool, setSelectedTool] = useState<ToolId | null>(() => {
     return (localStorage.getItem("PRE_SELECTED_TOOL") as ToolId) || null;
   });
+  const [wasWhatsAppEverOpened, setWasWhatsAppEverOpened] = useState(false);
+
+  useEffect(() => {
+    if (selectedTool === 'whatsapp-web') {
+      setWasWhatsAppEverOpened(true);
+    }
+  }, [selectedTool]);
 
   useEffect(() => {
     // Clear out preselected tool right after reading to avoid sticky behavior
@@ -164,15 +174,84 @@ export default function DocumentTools({
       color: 'bg-red-50 text-red-500',
       plan: 'FREE'
     },
-    { 
-      id: 'whatsapp-web', 
-      label: language === 'ta' ? 'வாட்ஸ்ஆப் வெப் (WhatsApp)' : 'WhatsApp Web', 
-      description: language === 'ta' ? 'வாடிக்கையாளரின் கோப்புகள் மற்றும் விவரங்களைப் பெற வாட்ஸ்அப் வெப் திறக்கவும்.' : 'Open WhatsApp Web to chat & get customer files.', 
-      icon: MessageSquare,
-      color: 'bg-emerald-50 text-emerald-600',
-      plan: 'FREE'
-    },
   ] as const;
+
+  // Tools Layout order Customizer
+  const [orderedTools, setOrderedTools] = useState<ToolItem[]>([]);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    const list = [...tools];
+    const savedOrder = localStorage.getItem('tools_order_v1');
+    if (savedOrder) {
+      try {
+        const orderIds = JSON.parse(savedOrder) as string[];
+        list.sort((a, b) => {
+          const idxA = orderIds.indexOf(a.id);
+          const idxB = orderIds.indexOf(b.id);
+          
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          if (idxA !== -1) return -1;
+          if (idxB !== -1) return 1;
+          return 0;
+        });
+      } catch (e) {
+        console.error("Failed to parse saved tools order", e);
+      }
+    }
+    setOrderedTools(list);
+  }, [language, subscribedPlan]);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (dragOverIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    const sourceIndexStr = e.dataTransfer.getData('text/plain');
+    if (!sourceIndexStr) return;
+    const sourceIndex = parseInt(sourceIndexStr, 10);
+    
+    if (sourceIndex !== targetIndex) {
+      const newList = [...orderedTools];
+      const [draggedItem] = newList.splice(sourceIndex, 1);
+      newList.splice(targetIndex, 0, draggedItem);
+      
+      setOrderedTools(newList);
+      
+      const orderIds = newList.map(item => item.id);
+      localStorage.setItem('tools_order_v1', JSON.stringify(orderIds));
+    }
+    
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleResetToolsOrder = () => {
+    if (confirm(language === 'ta' ? 'கருவிகளின் வரிசையை பழையபடி மாற்ற விரும்புகிறீர்களா?' : 'Are you sure you want to reset the tools layout order?')) {
+      localStorage.removeItem('tools_order_v1');
+      setOrderedTools([...tools]);
+    }
+  };
 
   const renderToolComponent = (id: ToolId) => {
     switch (id) {
@@ -186,6 +265,7 @@ export default function DocumentTools({
       case 'passport-resizer': return <PassportResizer />;
       case 'data-extraction': return <DataExtractionTool />;
       case 'word-editor': return <WordEditor activeProfile={activeProfile} onBack={() => setSelectedTool(null)} />;
+      case 'whatsapp-web': return <WhatsAppTool isNarrow={false} />;
       default: return null;
     }
   };
@@ -230,14 +310,6 @@ export default function DocumentTools({
   };
 
   const handleToolClick = (tool: ToolItem) => {
-    if (tool.id === 'whatsapp-web') {
-      if (onOpenPortal) {
-        onOpenPortal("https://web.whatsapp.com/", "WhatsApp Web");
-      } else {
-        window.open("https://web.whatsapp.com/", "_blank");
-      }
-      return;
-    }
     if (tool.plan === 'PREMIUM' && subscribedPlan !== 'PREMIUM') {
       setLockedTool(tool);
     } else {
@@ -249,55 +321,105 @@ export default function DocumentTools({
     <div className="max-w-6xl mx-auto space-y-8 pb-32">
       {/* 1. Main Grid View - Only shown when no tool is active */}
       {!selectedTool && (
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
-        >
-          {tools.map((tool) => (
+        <div className="space-y-6">
+          {/* Header/Reset Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4 bg-slate-50 p-6 rounded-3xl border border-slate-100">
+            <div className="space-y-1">
+              <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <Sparkles size={18} className="text-indigo-600 animate-pulse" />
+                <span>{language === 'ta' ? 'உதவி கருவிகள் (Utility Tools)' : 'Utility Tools'}</span>
+              </h2>
+              <p className="text-slate-400 font-bold uppercase tracking-widest text-[9px] leading-relaxed">
+                {language === 'ta' ? 'கார்டுகளின் மேல் உள்ள சாம்பல் நிறக் குறியைப் பிடித்து இழுத்து (Drag & Drop) தேவையான இடத்தில் வைக்கலாம்.' : 'Hold & drag any tool card to reorder them to your comfort.'}
+              </p>
+            </div>
+            {/* Reset button always visible if customized or optional */}
             <button 
-              key={tool.id}
-              onClick={() => handleToolClick(tool)}
-              className="group p-8 rounded-[2.5rem] bg-white border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all text-left flex flex-col gap-6 relative overflow-hidden"
+              onClick={handleResetToolsOrder} 
+              className="self-start sm:self-auto flex items-center gap-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 px-4 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider cursor-pointer shadow-xs transition-all"
             >
-              {/* Plan Badge */}
-              {tool.plan === 'PREMIUM' ? (
-                <div className="absolute top-6 right-6 px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[9px] font-black uppercase rounded-full tracking-wider shadow-sm flex items-center gap-1">
-                  <Sparkles size={10} className="text-amber-300 animate-pulse" />
-                  {language === "ta" ? "பிரீமியம்" : "Premium"}
-                </div>
-              ) : (
-                <div className="absolute top-6 right-6 px-3 py-1 bg-emerald-50 text-emerald-700 text-[9px] font-black uppercase rounded-full tracking-wider border border-emerald-100 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                  {language === "ta" ? "இலவசம்" : "Free"}
-                </div>
-              )}
-
-              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 ${tool.color}`}>
-                <tool.icon size={28} strokeWidth={2.5} />
-              </div>
-              <div>
-                <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm pr-16">{tool.label}</h3>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 italic leading-relaxed">{tool.description}</p>
-              </div>
-              <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-slate-900 opacity-0 group-hover:opacity-100 uppercase tracking-[0.2em] transition-opacity">
-                {tool.plan === 'PREMIUM' && subscribedPlan !== 'PREMIUM' ? (
-                  <span className="flex items-center gap-1 text-indigo-600">
-                    <Lock size={12} strokeWidth={3} /> {language === "ta" ? "பூட்டப்பட்டுள்ளது" : "Unlock Pro"}
-                  </span>
-                ) : (
-                  <>
-                    {t('openTool')} <Download size={12} strokeWidth={3} className="ml-1" />
-                  </>
-                )}
-              </div>
+              <RefreshCw size={11} />
+              <span>{language === 'ta' ? 'வரிசையை மீட்டமைக்க (Reset)' : 'Reset Layout Order'}</span>
             </button>
-          ))}
-        </motion.div>
+          </div>
+
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            {(orderedTools.length > 0 ? orderedTools : tools).map((tool, idx) => {
+              const isDraggingThis = idx === draggedIndex;
+              const isDragOverThis = idx === dragOverIndex;
+              
+              return (
+                <div
+                  key={tool.id}
+                  draggable="true"
+                  onDragStart={(e) => handleDragStart(e, idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, idx)}
+                  onDragEnd={handleDragEnd}
+                  className={`relative group transition-all duration-200 select-none rounded-[2.5rem] border-2 cursor-grab active:cursor-grabbing ${
+                    isDraggingThis ? "opacity-30 border-dashed border-indigo-400 bg-indigo-50/20 scale-95" : "border-transparent"
+                  } ${
+                    isDragOverThis ? "border-2 border-dashed border-sky-450 bg-sky-50/40 translate-y-[-4px] shadow-2xl scale-[1.01]" : ""
+                  }`}
+                >
+                  <button 
+                    onClick={() => handleToolClick(tool)}
+                    className="w-full h-full group p-8 rounded-[2.5rem] bg-white border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all text-left flex flex-col gap-6 relative overflow-hidden cursor-pointer"
+                  >
+                    {/* Plan Badge */}
+                    {tool.plan === 'PREMIUM' ? (
+                      <div className="absolute top-6 right-6 px-3 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[9px] font-black uppercase rounded-full tracking-wider shadow-sm flex items-center gap-1">
+                        <Sparkles size={10} className="text-amber-300 animate-pulse" />
+                        {language === "ta" ? "பிரீமியம்" : "Premium"}
+                      </div>
+                    ) : (
+                      <div className="absolute top-6 right-6 px-3 py-1 bg-emerald-50 text-emerald-700 text-[9px] font-black uppercase rounded-full tracking-wider border border-emerald-100 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        {language === "ta" ? "இலவசம்" : "Free"}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                      {/* Drag Grip affordance indicators */}
+                      <div className="text-slate-305 group-hover:text-slate-500 cursor-grab flex-shrink-0 transition-colors">
+                        <GripVertical size={16} />
+                      </div>
+                      
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 flex-shrink-0 ${tool.color}`}>
+                        <tool.icon size={28} strokeWidth={2.5} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm pr-16">{tool.label}</h3>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 italic leading-relaxed">{tool.description}</p>
+                    </div>
+                    <div className="mt-2 flex items-center gap-1 text-[10px] font-black text-slate-900 opacity-0 group-hover:opacity-100 uppercase tracking-[0.2em] transition-opacity">
+                      {tool.plan === 'PREMIUM' && subscribedPlan !== 'PREMIUM' ? (
+                        <span className="flex items-center gap-1 text-indigo-600">
+                          <Lock size={12} strokeWidth={3} /> {language === "ta" ? "பூட்டப்பட்டுள்ளது" : "Unlock Pro"}
+                        </span>
+                      ) : (
+                        <>
+                          {t('openTool')} <Download size={12} strokeWidth={3} className="ml-1" />
+                        </>
+                      )}
+                    </div>
+                  </button>
+                </div>
+              );
+            })}
+          </motion.div>
+        </div>
       )}
 
       {/* 2. Active Tool Interface */}
-      {selectedTool && (
+      {selectedTool && selectedTool !== 'whatsapp-web' && (
         <div className="space-y-6">
           {/* Top Navigation Bar - Sticky or Fixed at top of content (Hidden for Word Editor as it has integrated top menu) */}
           {selectedTool !== 'word-editor' && (
@@ -315,32 +437,35 @@ export default function DocumentTools({
 
           {/* Render All Tools wrapped in divs to preserve state */}
           <div className="relative">
-            {tools.map((tool) => (
-              <div 
-                key={tool.id} 
-                className={selectedTool === tool.id ? "block" : "hidden"}
-              >
-                {tool.id === 'word-editor' ? (
-                  <div className="relative z-10 w-full">
-                    {renderToolComponent(tool.id as ToolId)}
-                  </div>
-                ) : (
-                  <div className="bg-white p-10 sm:p-16 rounded-[3rem] border border-slate-100 shadow-2xl relative overflow-hidden min-h-[600px]">
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-slate-50 rounded-full blur-3xl -mr-32 -mt-32 opacity-50"></div>
-                    <div className="relative z-10">
-                      <div className="mb-10 flex flex-col gap-2">
-                         <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-4">
-                            <tool.icon size={32} className="text-blue-600" />
-                            {tool.label}
-                         </h2>
-                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest italic">{tool.description}</p>
-                      </div>
+            {tools.map((tool) => {
+              if (tool.id === 'whatsapp-web') return null;
+              return (
+                <div 
+                  key={tool.id} 
+                  className={selectedTool === tool.id ? "block" : "hidden"}
+                >
+                  {tool.id === 'word-editor' ? (
+                    <div className="relative z-10 w-full">
                       {renderToolComponent(tool.id as ToolId)}
                     </div>
-                  </div>
-                )}
-              </div>
-            ))}
+                  ) : (
+                    <div className="bg-white p-10 sm:p-16 rounded-[3rem] border border-slate-100 shadow-2xl relative overflow-hidden min-h-[600px]">
+                      <div className="absolute top-0 right-0 w-64 h-64 bg-slate-50 rounded-full blur-3xl -mr-32 -mt-32 opacity-50"></div>
+                      <div className="relative z-10">
+                        <div className="mb-10 flex flex-col gap-2">
+                           <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-4">
+                              <tool.icon size={32} className="text-blue-600" />
+                              {tool.label}
+                           </h2>
+                           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest italic">{tool.description}</p>
+                        </div>
+                        {renderToolComponent(tool.id as ToolId)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* Bottom Tools List - Persistent at the bottom */}
@@ -358,7 +483,7 @@ export default function DocumentTools({
              </div>
              
              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                {tools.map((t) => (
+                {(orderedTools.length > 0 ? orderedTools : tools).map((t) => (
                   <button
                     key={t.id}
                     onClick={() => {
@@ -420,6 +545,100 @@ export default function DocumentTools({
              >
                 Explore All Tools
              </button>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Persistent WhatsApp Web Interface (keeps state and login alive!) */}
+      {wasWhatsAppEverOpened && (
+        <div className={selectedTool === 'whatsapp-web' ? "space-y-6 block animate-fadeIn" : "hidden"}>
+          {/* Top Navigation Bar / Back button */}
+          <div className="sticky top-4 z-40 flex items-center">
+            <button 
+              onClick={() => setSelectedTool(null)}
+              className="flex items-center gap-3 px-6 py-4 bg-slate-900 text-white rounded-[2rem] hover:bg-slate-800 transition-all shadow-xl hover:scale-105 active:scale-95 cursor-pointer border-0"
+              title={t('backToTools')}
+            >
+              <ChevronLeft size={16} strokeWidth={3} />
+              <span className="text-[10px] font-black uppercase tracking-widest">{t('backToTools')}</span>
+            </button>
+          </div>
+
+          <div className="bg-white p-10 sm:p-16 rounded-[3rem] border border-slate-100 shadow-2xl relative overflow-hidden min-h-[600px]">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-slate-50 rounded-full blur-3xl -mr-32 -mt-32 opacity-50"></div>
+            <div className="relative z-10 w-full col-span-full">
+              <div className="mb-10 flex flex-col gap-2">
+                 <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-4">
+                    <MessageSquare size={32} className="text-emerald-600" />
+                    {language === 'ta' ? 'வாட்ஸ்ஆப் வெப் (WhatsApp)' : 'WhatsApp Web'}
+                 </h2>
+                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest italic">{language === 'ta' ? 'வாடிக்கையாளரின் கோப்புகள் மற்றும் விவரங்களைப் பெற வாட்ஸ்அப் வெப் திறக்கவும்.' : 'Open WhatsApp Web to chat & get customer files.'}</p>
+              </div>
+              <WhatsAppTool isNarrow={false} />
+            </div>
+          </div>
+
+          {/* Bottom Tools List - Persistent at the bottom for WhatsApp switch */}
+          <div className="mt-20 pt-20 border-t-2 border-slate-100 pb-20">
+             <div className="flex flex-col gap-2 mb-12 px-2">
+                 <div className="flex items-center gap-3">
+                    <div className="w-2 h-8 bg-blue-600 rounded-full"></div>
+                    <h3 className="text-xl font-black uppercase tracking-[0.2em] text-slate-900">
+                      Switch Tools / மற்ற கருவிகள்
+                    </h3>
+                 </div>
+                 <p className="text-xs font-bold text-slate-400 ml-5 uppercase tracking-widest">
+                    You can quickly switch to any other tool without losing your current progress.
+                 </p>
+             </div>
+             
+             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                {(orderedTools.length > 0 ? orderedTools : tools).map((t) => (
+                   <button
+                     key={t.id}
+                     onClick={() => {
+                       if (t.plan === 'PREMIUM' && subscribedPlan !== 'PREMIUM') {
+                         setLockedTool(t);
+                       } else {
+                         setSelectedTool(t.id as ToolId);
+                         window.scrollTo({ top: 0, behavior: 'smooth' });
+                       }
+                     }}
+                     className={`flex flex-col gap-4 p-8 rounded-[2.5rem] border-2 transition-all active:scale-95 group relative overflow-hidden ${
+                       selectedTool === t.id 
+                         ? 'bg-blue-600 border-blue-600 text-white shadow-2xl shadow-blue-500/40 translate-y-[-4px]' 
+                         : 'bg-white border-slate-100 text-slate-600 hover:border-blue-300 hover:shadow-xl shadow-sm'
+                     }`}
+                   >
+                     {/* Label overlay for sub/plan type */}
+                     {t.plan === 'PREMIUM' ? (
+                       <div className="absolute top-6 right-6 px-3 py-1 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[8px] font-black uppercase rounded-full tracking-wider shadow-sm flex items-center gap-1">
+                         <Sparkles size={8} fill="currentColor" />
+                         PRO
+                       </div>
+                     ) : (
+                       <div className="absolute top-6 right-6 px-3 py-1 bg-emerald-50 text-emerald-700 text-[8px] font-black uppercase rounded-full tracking-wider border border-emerald-100">
+                         {language === "ta" ? "இலவசம்" : "Free"}
+                       </div>
+                     )}
+
+                     <div className="flex items-center gap-3">
+                       <div className={`w-14 h-14 rounded-[1.2rem] flex items-center justify-center transition-transform group-hover:scale-110 shadow-sm ${selectedTool === t.id ? 'bg-white/20 text-white' : t.color}`}>
+                         <t.icon size={26} strokeWidth={2.5} />
+                       </div>
+                     </div>
+
+                     <div className="text-left mt-2">
+                       <span className={`text-[9px] font-bold uppercase tracking-widest opacity-60 ${selectedTool === t.id ? 'text-white' : ''}`}>
+                         {selectedTool === t.id ? 'Active' : 'Switch'}
+                       </span>
+                       <h4 className={`font-black uppercase tracking-wide text-[11px] mt-0.5 truncate ${selectedTool === t.id ? 'text-white font-extrabold' : 'text-slate-800'}`}>
+                         {t.label}
+                       </h4>
+                     </div>
+                   </button>
+                ))}
+             </div>
           </div>
         </div>
       )}

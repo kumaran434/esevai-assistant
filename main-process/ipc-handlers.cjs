@@ -3,6 +3,19 @@ const path = require('path');
 const fs = require('fs');
 const { preloadPath } = require('./automation-logic.cjs');
 
+const icPath = path.join(__dirname, '..', 'build', 'icon.ico');
+const pngPath = path.join(__dirname, '..', 'build', 'icon.png');
+const devIconPath = path.join(__dirname, '..', 'src', 'assets', 'images', 'app_logo.png');
+
+let appIconPath = undefined;
+if (fs.existsSync(icPath)) {
+  appIconPath = nativeImage.createFromPath(icPath);
+} else if (fs.existsSync(pngPath)) {
+  appIconPath = nativeImage.createFromPath(pngPath);
+} else if (fs.existsSync(devIconPath)) {
+  appIconPath = nativeImage.createFromPath(devIconPath);
+}
+
 let portalViews = {}; // tabId -> BrowserView
 let activeTabId = null;
 let sidebarWidthPercent = 0.4;
@@ -10,6 +23,8 @@ let portalView = null;
 let portalWin = null;
 let assistantView = null;
 let lastFile = null;
+let isWhatsAppOpen = false;
+let whatsAppWidth = 800;
 
 function checkIsDownloadOrPdf(urlStr) {
   const lower = urlStr.toLowerCase();
@@ -78,6 +93,7 @@ function handleNewWindowOpen(url, webContents) {
         parent: parentWin || undefined,
         autoHideMenuBar: true,
         title: "e-Gov Assistant Portal - Interactive Popup",
+        icon: appIconPath,
         webPreferences: {
           nodeIntegration: false,
           contextIsolation: true,
@@ -190,14 +206,28 @@ function setupIpcHandlers(mainWindow) {
     if (!mainWindow || mainWindow.isDestroyed() || !portalView || portalView.webContents.isDestroyed()) return;
     const bounds = mainWindow.getContentBounds();
     const sidebarWidth = Math.floor(bounds.width * sidebarWidthPercent);
-    const dividerWidth = 8; // Matches React's 'w-2' sleek divider width perfectly
+    const dividerWidth = sidebarWidthPercent > 0 ? 8 : 0; // Matches React's 'w-2' sleek divider width perfectly, or 0 if collapsed
+    
+    let startX = sidebarWidth + dividerWidth;
+    if (isWhatsAppOpen) {
+      // 24px is from the 'left-6' offset in App.tsx layout
+      const waEnd = 24 + whatsAppWidth;
+      startX = Math.max(startX, waEnd);
+    }
+
     portalView.setBounds({
-      x: sidebarWidth + dividerWidth, 
-      y: 56,
-      width: Math.max(0, bounds.width - sidebarWidth - dividerWidth),
-      height: Math.max(0, bounds.height - 56)
+      x: startX, 
+      y: 92,
+      width: Math.max(0, bounds.width - startX),
+      height: Math.max(0, bounds.height - 92)
     });
   };
+
+  ipcMain.on('update-whatsapp-floating-state', (event, { isOpen, width }) => {
+    isWhatsAppOpen = isOpen;
+    whatsAppWidth = width || 800;
+    updatePortalBounds();
+  });
 
   ipcMain.on('update-sidebar-width', (event, percent) => {
     sidebarWidthPercent = percent;
@@ -221,14 +251,17 @@ function setupIpcHandlers(mainWindow) {
   mainWindow.on('resize', updatePortalBounds);
 
   function switchToTab(id) {
-    if (portalView && !portalView.webContents.isDestroyed()) {
-      try {
-        mainWindow.removeBrowserView(portalView);
-      } catch (err) {
-        console.error('Error removing BrowserView in switchToTab:', err);
+    // Clear and remove all active portal views from the main window first
+    Object.keys(portalViews).forEach(tabId => {
+      if (portalViews[tabId] && !portalViews[tabId].webContents.isDestroyed()) {
+        try {
+          mainWindow.removeBrowserView(portalViews[tabId]);
+        } catch (err) {
+          // Ignore if already removed or not attached
+        }
       }
-      portalView = null;
-    }
+    });
+    portalView = null;
     
     activeTabId = id;
     
@@ -288,6 +321,9 @@ function setupIpcHandlers(mainWindow) {
         preload: preloadPath
       }
     });
+
+    // Set standard Chrome User Agent to bypass browser version restriction checks (e.g., WhatsApp Web)
+    newView.webContents.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36");
 
     newView.setBackgroundColor('#ffffff');
     portalViews[id] = newView;
@@ -368,13 +404,15 @@ function setupIpcHandlers(mainWindow) {
   });
 
   ipcMain.on('hide-portal-views', () => {
-    if (portalView && !portalView.webContents.isDestroyed()) {
-      try {
-        mainWindow.removeBrowserView(portalView);
-      } catch (err) {
-        console.error('Error removing BrowserView:', err);
+    Object.keys(portalViews).forEach(tabId => {
+      if (portalViews[tabId] && !portalViews[tabId].webContents.isDestroyed()) {
+        try {
+          mainWindow.removeBrowserView(portalViews[tabId]);
+        } catch (err) {
+          // Ignore
+        }
       }
-    }
+    });
   });
 
   ipcMain.on('close-portal', () => {
@@ -506,8 +544,12 @@ function setupIpcHandlers(mainWindow) {
       width: sw - 100, x: 50, height: sh - 100, y: 50,
       title: "e-Gov Portal AI Assisted",
       autoHideMenuBar: true,
+      icon: appIconPath,
       webPreferences: { nodeIntegration: false, contextIsolation: true, webSecurity: false, preload: preloadPath }
     });
+
+    // Set standard Chrome User Agent to bypass browser version restriction checks (e.g., WhatsApp Web)
+    portalWin.webContents.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36");
 
     portalWin.loadURL(url);
 
